@@ -111,4 +111,10 @@ echo.
 echo ⚠️  WARNING: Never use 'docker-compose down -v' (deletes database!)
 echo.
 
+echo 🌐 Opening Web UI in browser...
+timeout /t 2 /nobreak >nul
+start http://localhost:3000
+echo ✅ Web UI opened at http://localhost:3000
+echo.
+
 pause

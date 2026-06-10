@@ -19,7 +19,7 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 # Read API key and model from environment (.env or container env)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
 # Optional limit for very large PDFs (0 = no limit)
 MAX_PDF_PAGES = int(os.getenv("MAX_PDF_PAGES", "0"))
 

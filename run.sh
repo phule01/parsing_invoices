@@ -98,3 +98,13 @@ echo "  docker-compose ps         # Check status"
 echo ""
 echo "⚠️  WARNING: Never use 'docker-compose down -v' (deletes database!)"
 echo ""
+
+# Open web UI in default browser
+echo "🌐 Opening Web UI in browser..."
+sleep 2
+if [ "$OSTYPE" == "darwin"* ]; then
+    open "http://localhost:3000" 2>/dev/null || true
+else
+    xdg-open "http://localhost:3000" 2>/dev/null || firefox "http://localhost:3000" 2>/dev/null || true
+fi
+echo "✅ Web UI opened at http://localhost:3000"
