@@ -39,6 +39,7 @@ from router import (
     products_v2,
     websocket_router,
     telegram_router,
+    settings,
 )
 
 from telegram_utils import get_telegram_status
@@ -154,6 +155,7 @@ api.include_router(invoices_router,         tags=["Invoices"])
 api.include_router(products_v2.router,      tags=["Products"])
 api.include_router(websocket_router.router, tags=["WebSocket"])
 api.include_router(telegram_router.router,  tags=["Telegram"])
+api.include_router(settings.router,         tags=["Settings"])
 api.include_router(reports.router,   prefix="/api/reports",  tags=["Reports"])
 api.include_router(emails.router,    prefix="/api/emails",   tags=["Emails"])
 

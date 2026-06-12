@@ -5,12 +5,12 @@
   justify-content: center;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  padding: 20px;
 }
 
 .login-container {
   width: 100%;
-  max-width: 400px;
-  padding: 20px;
+  max-width: 500px;
 }
 
 .login-box {
@@ -46,26 +46,66 @@
   margin-bottom: 30px;
 }
 
+.admin-subtitle {
+  text-align: center;
+  color: #666;
+  font-size: 13px;
+  margin: -30px 0 20px 0;
+  font-style: italic;
+}
+
+/* Tabs */
+.login-tabs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 30px;
+  border-bottom: 2px solid #eee;
+}
+
+.tab-button {
+  flex: 1;
+  padding: 12px;
+  border: none;
+  background: none;
+  color: #999;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  transition: all 0.3s;
+}
+
+.tab-button.active {
+  color: #667eea;
+  border-bottom-color: #667eea;
+}
+
+.tab-button:hover {
+  color: #667eea;
+}
+
+/* Form Groups */
 .form-group {
-  margin-bottom: 20px;
+  margin-bottom: 18px;
 }
 
 .form-group label {
   display: block;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   font-weight: 500;
   color: #333;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .form-group input {
   width: 100%;
-  padding: 12px;
+  padding: 10px 12px;
   border: 1px solid #ddd;
   border-radius: 6px;
   font-size: 14px;
   transition: border-color 0.3s;
   box-sizing: border-box;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', monospace;
 }
 
 .form-group input:focus {
@@ -79,16 +119,68 @@
   cursor: not-allowed;
 }
 
+.form-group small {
+  display: block;
+  margin-top: 5px;
+  font-size: 12px;
+  color: #666;
+}
+
+.form-group small a {
+  color: #667eea;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.form-group small a:hover {
+  text-decoration: underline;
+}
+
+/* Form Sections */
+.form-section {
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  padding: 15px;
+  margin-bottom: 16px;
+  background: #f9f9f9;
+}
+
+.form-section legend {
+  font-weight: 600;
+  font-size: 13px;
+  color: #333;
+  padding: 0 5px;
+  margin-bottom: 12px;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* Error/Success Messages */
 .error-message {
   background-color: #fee;
   color: #c33;
   padding: 12px;
   border-radius: 6px;
   margin-bottom: 20px;
-  font-size: 14px;
+  font-size: 13px;
   border-left: 4px solid #c33;
 }
 
+.success-message {
+  background-color: #efe;
+  color: #3c3;
+  padding: 12px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+  font-size: 13px;
+  border-left: 4px solid #3c3;
+}
+
+/* Buttons */
 .login-button {
   width: 100%;
   padding: 12px;
@@ -96,10 +188,11 @@
   color: white;
   border: none;
   border-radius: 6px;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   cursor: pointer;
   transition: transform 0.2s, box-shadow 0.2s;
+  margin-top: 10px;
   margin-bottom: 20px;
 }
 
@@ -113,6 +206,7 @@
   cursor: not-allowed;
 }
 
+/* Demo Info */
 .demo-info {
   background-color: #f0f4ff;
   border: 1px solid #dde5ff;
@@ -123,20 +217,23 @@
 
 .demo-info h3 {
   margin: 0 0 10px;
-  font-size: 14px;
+  font-size: 13px;
   color: #333;
+  font-weight: 600;
 }
 
 .demo-info p {
-  margin: 6px 0;
-  font-size: 13px;
+  margin: 5px 0;
+  font-size: 12px;
   color: #555;
+  font-family: monospace;
 }
 
 .demo-info strong {
   color: #333;
 }
 
+/* Responsive */
 @media (max-width: 600px) {
   .login-box {
     padding: 30px 20px;
@@ -144,5 +241,28 @@
 
   .login-box h1 {
     font-size: 24px;
+  }
+
+  .login-tabs {
+    margin-bottom: 25px;
+  }
+
+  .tab-button {
+    font-size: 13px;
+    padding: 10px;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .form-section {
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+
+  .form-section legend {
+    font-size: 12px;
+    margin-bottom: 10px;
   }
 }

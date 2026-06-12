@@ -1,0 +1,194 @@
+.settings-module {
+  padding: 20px;
+}
+
+.settings-module h2 {
+  font-size: 28px;
+  margin-bottom: 5px;
+  color: #333;
+}
+
+.admin-only {
+  color: #666;
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+
+.settings-form {
+  max-width: 800px;
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.settings-section {
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  padding: 20px;
+  margin-bottom: 20px;
+  background: #f9f9f9;
+}
+
+.settings-section legend {
+  font-weight: 600;
+  font-size: 16px;
+  color: #333;
+  padding: 0 10px;
+}
+
+.form-group {
+  margin-bottom: 15px;
+}
+
+.form-group label {
+  display: block;
+  font-weight: 500;
+  margin-bottom: 5px;
+  color: #333;
+  font-size: 14px;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  font-family: monospace;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #4a90e2;
+  box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+}
+
+.form-group small {
+  display: block;
+  margin-top: 5px;
+  color: #666;
+  font-size: 12px;
+}
+
+.form-group a {
+  color: #4a90e2;
+  text-decoration: none;
+}
+
+.form-group a:hover {
+  text-decoration: underline;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.btn-primary {
+  background: #4a90e2;
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #357abd;
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-test {
+  background: #f0ad4e;
+  color: white;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.3s;
+  margin-top: 10px;
+}
+
+.btn-test:hover:not(:disabled) {
+  background: #ec971f;
+}
+
+.btn-test:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.error-message {
+  background: #fee;
+  border: 1px solid #fcc;
+  border-radius: 4px;
+  padding: 12px;
+  color: #c33;
+  margin-bottom: 15px;
+  font-size: 14px;
+}
+
+.success-message {
+  background: #efe;
+  border: 1px solid #cfc;
+  border-radius: 4px;
+  padding: 12px;
+  color: #3c3;
+  margin-bottom: 15px;
+  font-size: 14px;
+}
+
+.settings-info {
+  margin-top: 30px;
+  background: #e3f2fd;
+  border: 1px solid #90caf9;
+  border-radius: 6px;
+  padding: 15px;
+}
+
+.settings-info h3 {
+  margin-top: 0;
+  color: #1565c0;
+  font-size: 16px;
+}
+
+.settings-info ul {
+  margin: 10px 0;
+  padding-left: 20px;
+  color: #333;
+  font-size: 14px;
+}
+
+.settings-info li {
+  margin-bottom: 8px;
+}
+
+@media (max-width: 600px) {
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-form {
+    padding: 15px;
+  }
+
+  .settings-section {
+    padding: 15px;
+  }
+}

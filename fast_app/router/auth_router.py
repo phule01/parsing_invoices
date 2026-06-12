@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models import User
-from auth_schemas import TokenResponse, UserLogin, UserRegister, UserResponse
+from auth_schemas import TokenResponse, UserLogin, UserRegister, AdminRegister, UserResponse
 from app.core.security import (
     authenticate_user,
     create_access_token,
@@ -114,6 +114,59 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
         token_type="bearer",
         user_id=new_user.id,
         username=new_user.username,
+        expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    )
+
+
+# ── Admin Setup ───────────────────────────────────────────────────────────────
+
+@router.post("/admin-setup", response_model=TokenResponse)
+async def admin_setup(admin_data: AdminRegister, db: Session = Depends(get_db)):
+    """
+    Admin setup/registration with all system credentials.
+    Only allowed if no admin exists yet (first-time setup).
+    """
+    # Check if admin already exists
+    existing_admin = db.query(User).filter(User.is_admin == True).first()
+    if existing_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin account already exists. Contact the current admin to manage users."
+        )
+
+    if db.query(User).filter(User.username == admin_data.username).first():
+        raise HTTPException(status_code=400, detail="Username already exists")
+
+    if db.query(User).filter(User.email == admin_data.email).first():
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    # Create admin user with all credentials
+    admin_user = User(
+        username=admin_data.username,
+        email=admin_data.email,
+        hashed_password=hash_password(admin_data.password),
+        is_active=True,
+        is_admin=True,
+        email_password=admin_data.email_password,
+        gemini_api_key=admin_data.gemini_api_key,
+        telegram_bot_token=admin_data.telegram_bot_token,
+        telegram_chat_id=admin_data.telegram_chat_id,
+        imap_server=admin_data.imap_server,
+        smtp_server=admin_data.smtp_server,
+    )
+    db.add(admin_user)
+    db.commit()
+    db.refresh(admin_user)
+
+    log_audit(db, user_id=admin_user.id, action="ADMIN_SETUP",
+              details="Admin account created with system credentials")
+
+    token = create_access_token(user_id=admin_user.id, username=admin_user.username)
+    return TokenResponse(
+        access_token=token,
+        token_type="bearer",
+        user_id=admin_user.id,
+        username=admin_user.username,
         expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )
 

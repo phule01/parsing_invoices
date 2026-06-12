@@ -12,8 +12,17 @@ class User(Base):
     email = Column(String(100), unique=True, nullable=False, index=True)
     hashed_password = Column(String(255), nullable=False)
     is_active = Column(Boolean, default=True)
+    is_admin = Column(Boolean, default=False)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    # Credentials for email and integrations (only used by admin)
+    email_password = Column(String(255), nullable=True)  # Gmail App Password
+    gemini_api_key = Column(String(500), nullable=True)
+    telegram_bot_token = Column(String(500), nullable=True)
+    telegram_chat_id = Column(String(100), nullable=True)
+    imap_server = Column(String(100), nullable=True)
+    smtp_server = Column(String(100), nullable=True)
 
     invoices = relationship("Invoice", back_populates="user")
     audit_logs = relationship("AuditLog", back_populates="user")

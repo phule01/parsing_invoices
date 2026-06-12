@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useWebSocket } from '../context/WebSocketContext';
 import InvoiceModule from '../components/InvoiceModule/InvoiceModule';
 import ProductModule from '../components/ProductModule/ProductModule';
+import SettingsModule from '../components/SettingsModule/SettingsModule';
 import './Dashboard.css';
 
 function Dashboard() {
@@ -42,12 +43,19 @@ function Dashboard() {
             >
               📦 Products
             </button>
+            <button
+              className={`nav-item ${activeModule === 'settings' ? 'active' : ''}`}
+              onClick={() => setActiveModule('settings')}
+            >
+              ⚙️ Settings
+            </button>
           </nav>
         </aside>
 
         <main className="dashboard-content">
           {activeModule === 'invoices' && <InvoiceModule />}
           {activeModule === 'products' && <ProductModule />}
+          {activeModule === 'settings' && <SettingsModule />}
         </main>
       </div>
     </div>
