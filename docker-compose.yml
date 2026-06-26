@@ -1,18 +1,31 @@
-version: '3.8'
-
+# Docker Compose v2 — no 'version' key needed
 services:
   web:
     build:
       context: ./web_ui
       dockerfile: Dockerfile
+      args:
+        REACT_APP_API_URL: ${REACT_APP_API_URL:-http://localhost:8000}
     container_name: tool_orc_web
     ports:
       - "3000:80"
-    environment:
-      - REACT_APP_API_URL=http://localhost:8000
     depends_on:
-      - fastapi
+      fastapi:
+        condition: service_healthy
+    networks:
+      - tool_orc_network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   postgres:
     image: postgres:15-alpine
@@ -25,16 +38,21 @@ services:
       - "${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql
+      - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
     networks:
       - tool_orc_network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-tool_orc_db}"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 15s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   fastapi:
     build:
@@ -44,13 +62,13 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/${DB_NAME:-tool_orc_db}
-      PYTHONUNBUFFERED: 1
+      PYTHONUNBUFFERED: "1"
       DEBUG: ${DEBUG:-False}
       ENVIRONMENT: ${ENVIRONMENT:-production}
       SECRET_KEY: ${SECRET_KEY}
       USER1_USERNAME: ${USER1_USERNAME:-admin}
       USER2_USERNAME: ${USER2_USERNAME:-user}
-      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
     ports:
       - "${API_PORT:-8000}:8000"
     depends_on:
@@ -59,6 +77,7 @@ services:
     volumes:
       - ./fast_app:/app
       - ./email_listener:/email_listener
+      - ./.env:/app/../.env
     networks:
       - tool_orc_network
     restart: unless-stopped
@@ -68,6 +87,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
 
   email_listener:
     build:
@@ -76,19 +100,22 @@ services:
     container_name: tool_orc_email_listener
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/${DB_NAME:-tool_orc_db}
-      PYTHONUNBUFFERED: 1
+      PYTHONUNBUFFERED: "1"
+      # Email credentials — also fetched at runtime from /api/settings/runtime
+      # so Web UI changes take effect without restarting this container.
       IMAP_SERVER: ${IMAP_SERVER:-imap.gmail.com}
       IMAP_PORT: ${IMAP_PORT:-993}
-      EMAIL_ADDRESS: ${EMAIL_ADDRESS}
-      EMAIL_PASSWORD: ${EMAIL_PASSWORD}
-      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      EMAIL_ADDRESS: ${EMAIL_ADDRESS:-}
+      EMAIL_PASSWORD: ${EMAIL_PASSWORD:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       DOWNLOAD_DIR: /app/invoices
       API_BASE_URL: http://fastapi:8000
       API_USERNAME: ${API_USERNAME:-admin}
       API_PASSWORD: ${API_PASSWORD:-admin}
       SCAN_INTERVAL_SECONDS: ${SCAN_INTERVAL_SECONDS:-300}
       SCAN_ALL_MAIL: ${SCAN_ALL_MAIL:-false}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
       GEMINI_API_DELAY: ${GEMINI_API_DELAY:-2.0}
       GEMINI_API_TIMEOUT: ${GEMINI_API_TIMEOUT:-120}
       GEMINI_API_RETRIES: ${GEMINI_API_RETRIES:-3}
@@ -100,13 +127,20 @@ services:
         condition: service_healthy
     volumes:
       - ./email_listener:/app
-      - ./email_listener/invoices:/app/invoices
+      - invoice_files:/app/invoices
     networks:
       - tool_orc_network
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
 
 volumes:
   postgres_data:
+    driver: local
+  invoice_files:
     driver: local
 
 networks:

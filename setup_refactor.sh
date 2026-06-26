@@ -10,9 +10,9 @@
 #   ./setup_refactor.sh
 #
 # After running:
-#   DEV  → docker-compose restart fastapi
-#   PROD → docker-compose -f docker-compose_prod.yml build fastapi
-#          docker-compose -f docker-compose_prod.yml up -d fastapi
+#   DEV  → docker compose restart fastapi
+#   PROD → docker compose -f docker-compose.prod.yml build fastapi
+#          docker compose -f docker-compose.prod.yml up -d fastapi
 
 set -e
 
@@ -111,12 +111,12 @@ echo "  Done — next steps"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 echo "DEVELOPMENT:"
-echo "  docker-compose restart fastapi"
-echo "  docker-compose logs -f fastapi"
+echo "  docker compose restart fastapi"
+echo "  docker compose logs -f fastapi"
 echo ""
 echo "PRODUCTION:"
-echo "  docker-compose -f docker-compose_prod.yml build --no-cache fastapi"
-echo "  docker-compose -f docker-compose_prod.yml up -d fastapi"
+echo "  docker compose -f docker-compose.prod.yml build --no-cache fastapi"
+echo "  docker compose -f docker-compose.prod.yml up -d fastapi"
 echo ""
 echo "Verify the API is healthy:"
 echo "  curl http://localhost:8000/health"

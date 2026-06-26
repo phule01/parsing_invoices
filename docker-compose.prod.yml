@@ -1,4 +1,5 @@
-version: '3.8'
+# Docker Compose v2 — PRODUCTION (no 'version' key needed)
+# Run: docker compose -f docker-compose.prod.yml up -d --build
 
 services:
   postgres:
@@ -17,28 +18,39 @@ services:
       - tool_orc_network
     restart: always
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 15s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
 
   fastapi:
     build:
-      context: ./fastapi_app
+      context: ./fast_app
       dockerfile: Dockerfile
     container_name: tool_orc_fastapi_prod
+    env_file: .env
     environment:
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
-      PYTHONUNBUFFERED: 1
+      PYTHONUNBUFFERED: "1"
       DEBUG: "False"
       ENVIRONMENT: production
+      SECRET_KEY: ${SECRET_KEY}
+      USER1_USERNAME: ${USER1_USERNAME:-admin}
+      USER2_USERNAME: ${USER2_USERNAME:-user}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
     ports:
-      - "127.0.0.1:${API_PORT}:8000"
+      - "127.0.0.1:${API_PORT:-8000}:8000"
     depends_on:
       postgres:
         condition: service_healthy
     volumes:
-      - ./fastapi_app/logs:/app/logs
+      - ./.env:/app/../.env
     networks:
       - tool_orc_network
     restart: always
@@ -48,30 +60,88 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "10"
 
   email_listener:
     build:
       context: ./email_listener
       dockerfile: Dockerfile
     container_name: tool_orc_email_listener_prod
+    env_file: .env
     environment:
-      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
-      PYTHONUNBUFFERED: 1
+      PYTHONUNBUFFERED: "1"
+      IMAP_SERVER: ${IMAP_SERVER:-imap.gmail.com}
+      IMAP_PORT: ${IMAP_PORT:-993}
+      EMAIL_ADDRESS: ${EMAIL_ADDRESS:-}
+      EMAIL_PASSWORD: ${EMAIL_PASSWORD:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      DOWNLOAD_DIR: /app/invoices
+      API_BASE_URL: http://fastapi:8000
+      API_USERNAME: ${API_USERNAME:-admin}
+      API_PASSWORD: ${API_PASSWORD:-admin}
+      SCAN_INTERVAL_SECONDS: ${SCAN_INTERVAL_SECONDS:-300}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      GEMINI_API_DELAY: ${GEMINI_API_DELAY:-2.0}
+      GEMINI_API_TIMEOUT: ${GEMINI_API_TIMEOUT:-120}
+      GEMINI_API_RETRIES: ${GEMINI_API_RETRIES:-3}
     depends_on:
       postgres:
         condition: service_healthy
+      fastapi:
+        condition: service_healthy
+    volumes:
+      - invoice_files_prod:/app/invoices
     networks:
       - tool_orc_network
     restart: always
     logging:
       driver: "json-file"
       options:
+        max-size: "20m"
+        max-file: "10"
+
+  # ── Web UI ───────────────────────────────────────────────────────────────
+  web:
+    build:
+      context: ./web_ui
+      dockerfile: Dockerfile
+      args:
+        REACT_APP_API_URL: ${REACT_APP_API_URL:-}
+    container_name: tool_orc_web_prod
+    ports:
+      - "3000:80"
+    depends_on:
+      fastapi:
+        condition: service_healthy
+    networks:
+      - tool_orc_network
+    restart: always
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: "json-file"
+      options:
         max-size: "10m"
-        max-file: "3"
+        max-file: "5"
 
 volumes:
   postgres_data_prod:
+    driver: local
+  invoice_files_prod:
+    driver: local
 
 networks:
   tool_orc_network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.26.0.0/16
