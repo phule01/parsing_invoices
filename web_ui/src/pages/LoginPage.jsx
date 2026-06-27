@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import './LoginPage.css';
 
+const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+
 function LoginPage() {
   const { login, loading, error } = useAuth();
   const [activeTab, setActiveTab] = useState('user'); // 'user' or 'admin'
@@ -30,7 +32,7 @@ function LoginPage() {
   useEffect(() => {
     const checkAdmin = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/auth/validate-token', {
+        const response = await fetch(`${API_BASE}/api/auth/validate-token`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
         });
@@ -66,7 +68,7 @@ function LoginPage() {
     }
 
     try {
-      const response = await fetch('http://localhost:8000/api/auth/admin-setup', {
+      const response = await fetch(`${API_BASE}/api/auth/admin-setup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

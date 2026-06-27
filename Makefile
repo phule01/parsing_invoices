@@ -2,10 +2,9 @@
 # Requires: Docker Compose v2  (docker compose, NOT docker-compose)
 
 .PHONY: help up up-prod down stop start restart build build-no-cache \
-        logs logs-api logs-web logs-email logs-db \
+        logs logs-api logs-web logs-email logs-db logs-tunnel \
         clean clean-images status health \
-        db-shell db-backup \
-        ngrok ngrok-setup
+        db-shell db-backup
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Help
@@ -47,14 +46,13 @@ help:
 	@echo "    make clean           Remove containers + volumes (⚠ deletes DB!)"
 	@echo "    make clean-images    Remove built images (keeps data)"
 	@echo ""
-	@echo "  Ngrok (Telegram webhook):"
-	@echo "    make ngrok           Start ngrok tunnel on port 8000"
-	@echo "    make ngrok-setup     Install ngrok"
+	@echo "  Cloudflare Tunnel:"
+	@echo "    make logs-tunnel     Stream Cloudflare Tunnel logs"
 	@echo ""
 	@echo "  Service URLs:"
-	@echo "    Web UI:    http://localhost:3000"
-	@echo "    API:       http://localhost:8000"
-	@echo "    API Docs:  http://localhost:8000/docs"
+	@echo "    Web UI:    http://localhost:7300"
+	@echo "    API:       http://localhost:7300/api"
+	@echo "    API Docs:  http://localhost:7300/api/docs"
 	@echo "    Database:  localhost:5432"
 	@echo "═══════════════════════════════════════════════════════════════════"
 
@@ -65,12 +63,12 @@ help:
 up:
 	@echo "🚀 Starting containers (dev)..."
 	docker compose up -d --build
-	@echo "✅ Done! Web UI: http://localhost:3000"
+	@echo "✅ Done! Web UI: http://localhost:7300"
 
 up-prod:
 	@echo "🚀 Starting containers (production)..."
 	docker compose -f docker-compose.prod.yml up -d --build
-	@echo "✅ Done! Web UI: http://localhost:3000"
+	@echo "✅ Done! Web UI: http://localhost:7300"
 
 down:
 	@echo "⏹️  Stopping and removing containers..."
@@ -121,6 +119,9 @@ logs-email:
 logs-db:
 	docker compose logs -f postgres
 
+logs-tunnel:
+	docker compose logs -f cloudflared
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Cleanup
 # ─────────────────────────────────────────────────────────────────────────────
@@ -137,33 +138,6 @@ clean-images:
 	@echo "🧹 Removing built images (data volumes preserved)..."
 	docker compose down --rmi local
 	@echo "✅ Images removed. Run 'make build' to rebuild."
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Ngrok (optional — needed for Telegram webhook on local machine)
-# ─────────────────────────────────────────────────────────────────────────────
-
-ngrok-setup:
-	@echo "📥 Installing ngrok..."
-	@if command -v brew >/dev/null 2>&1; then \
-	    brew install ngrok; \
-	elif command -v apt-get >/dev/null 2>&1; then \
-	    curl -fsSL https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null; \
-	    echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list; \
-	    sudo apt-get update && sudo apt-get install -y ngrok; \
-	else \
-	    echo "Please install ngrok manually: https://ngrok.com/download"; \
-	    exit 1; \
-	fi
-	@echo "✅ ngrok installed."
-	@echo "   Next: ngrok config add-authtoken YOUR_TOKEN"
-
-ngrok:
-	@echo "🌐 Starting ngrok tunnel on port 8000..."
-	@echo "   Copy the https:// URL, then:"
-	@echo "   1. Update .env: TELEGRAM_WEBHOOK_URL=https://YOUR_URL/api/telegram/webhook"
-	@echo "   2. Run: docker compose restart fastapi"
-	@echo ""
-	ngrok http 8000
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Database
@@ -191,10 +165,10 @@ health:
 	@echo "🏥 Checking service health..."
 	@echo ""
 	@echo "FastAPI Health:"
-	@curl -sf http://localhost:8000/health | python3 -m json.tool 2>/dev/null || echo "❌ Not responding"
+	@curl -sf http://localhost:7300/api/health | python3 -m json.tool 2>/dev/null || echo "❌ Not responding"
 	@echo ""
 	@echo "Telegram Status:"
-	@curl -sf http://localhost:8000/api/telegram/status | python3 -m json.tool 2>/dev/null || echo "❌ Not responding"
+	@curl -sf http://localhost:7300/api/telegram/status | python3 -m json.tool 2>/dev/null || echo "❌ Not responding"
 	@echo ""
 	@echo "Database:"
 	@docker compose exec -T postgres pg_isready -U $${DB_USER:-postgres} || echo "❌ Not responding"

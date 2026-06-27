@@ -2,6 +2,8 @@ import React, { createContext, useState, useContext, useEffect, useCallback } fr
 
 const AuthContext = createContext(null);
 
+const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
@@ -21,13 +23,13 @@ export function AuthProvider({ children }) {
   // Validate token with backend
   const validateToken = async (token) => {
     try {
-      const response = await fetch('http://localhost:8000/api/auth/validate-token', {
+      const response = await fetch(`${API_BASE}/api/auth/validate-token`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
       if (response.ok) {
         // Token is valid, fetch user info
-        const userResponse = await fetch('http://localhost:8000/api/auth/me', {
+        const userResponse = await fetch(`${API_BASE}/api/auth/me`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         
@@ -56,7 +58,7 @@ export function AuthProvider({ children }) {
     setError(null);
     
     try {
-      const response = await fetch('http://localhost:8000/api/auth/login', {
+      const response = await fetch(`${API_BASE}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })

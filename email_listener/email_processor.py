@@ -45,7 +45,7 @@ SCAN_INTERVAL = int(os.getenv("SCAN_INTERVAL_SECONDS", 300))  # 5 minutes
 DOWNLOAD_DIR = os.getenv("DOWNLOAD_DIR", "/tmp/invoices")
 API_BASE_URL = os.getenv("API_BASE_URL", "http://fastapi:8000")
 API_USERNAME = os.getenv("API_USERNAME", "admin")
-API_PASSWORD = os.getenv("API_PASSWORD", "admin123")
+API_PASSWORD = os.getenv("API_PASSWORD", "admin")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)

@@ -40,6 +40,10 @@ if [ ! -f ".env" ]; then
   exit 1
 fi
 
+# ── Load port config ──────────────────────────────────────────────────────────
+# The system now runs behind a unified Nginx proxy on port 7300
+NGINX_PORT=7300
+
 echo ""
 echo "🚀 Starting Tool ORC Invoice System..."
 echo "   Config: $COMPOSE_FILE"
@@ -74,10 +78,10 @@ for i in $(seq 1 90); do
   sleep 1
 done
 
-# ── Wait: FastAPI ──────────────────────────────────────────────────────────────
+# ── Wait: FastAPI (via Nginx proxy) ───────────────────────────────────────────
 echo "  ⏳ FastAPI..."
 for i in $(seq 1 60); do
-  if curl -sf http://localhost:8000/health >/dev/null 2>&1; then
+  if curl -sf http://localhost:${NGINX_PORT}/health >/dev/null 2>&1; then
     echo "  ✅ FastAPI ready"
     break
   fi
@@ -95,11 +99,10 @@ echo ""
 echo "📊 Container Status:"
 docker compose -f "$COMPOSE_FILE" ps
 
-echo ""
 echo "🌐 Access Points:"
-echo "  • Web UI:   http://localhost:3000"
-echo "  • API Docs: http://localhost:8000/docs"
-echo "  • API:      http://localhost:8000"
+echo "  • Web UI:   http://localhost:${NGINX_PORT}"
+echo "  • API Docs: http://localhost:${NGINX_PORT}/api/docs"
+echo "  • API:      http://localhost:${NGINX_PORT}/api"
 echo ""
 echo "📖 Useful Commands (Docker Compose v2):"
 echo "  docker compose stop                    # Stop (keeps data)"
@@ -115,29 +118,26 @@ echo "⚠️  WARNING: Never run 'docker compose down -v' — deletes database!"
 echo "═══════════════════════════════════════════════════════════"
 echo ""
 
-# ── Ngrok (optional) ──────────────────────────────────────────────────────────
-if command -v ngrok &>/dev/null && ! pgrep -x "ngrok" &>/dev/null; then
-  echo "🌍 Starting ngrok tunnel (for Telegram webhook)..."
-  ngrok http 8000 --log=stdout >/dev/null 2>&1 &
-  sleep 3
-  NGROK_URL=$(curl -sf http://localhost:4040/api/tunnels 2>/dev/null \
-    | grep -o '"public_url":"[^"]*' | grep https | cut -d'"' -f4 | head -1 || echo "")
-  if [[ -n "$NGROK_URL" ]]; then
-    echo "✅ ngrok: $NGROK_URL"
-    sed -i.bak "s|TELEGRAM_WEBHOOK_URL=.*|TELEGRAM_WEBHOOK_URL=$NGROK_URL/api/telegram/webhook|" .env
-    docker compose -f "$COMPOSE_FILE" restart fastapi >/dev/null 2>&1
-    echo "✅ Telegram webhook: $NGROK_URL/api/telegram/webhook"
+# ── Cloudflare Tunnel status ──────────────────────────────────────────────────
+CF_STATUS=$(docker inspect --format='{{.State.Status}}' tool_orc_cloudflared 2>/dev/null || echo "not_found")
+if [[ "$CF_STATUS" == "running" ]]; then
+  echo "🌐 Cloudflare Tunnel: running"
+  WEBHOOK_URL=$(grep -oP 'TELEGRAM_WEBHOOK_URL=\K.*' .env 2>/dev/null || echo "")
+  if [[ -n "$WEBHOOK_URL" ]]; then
+    echo "   Telegram webhook: $WEBHOOK_URL"
   else
-    echo "ℹ️  ngrok started (could not read URL — check http://localhost:4040)"
+    echo "   ⚠️  Set TELEGRAM_WEBHOOK_URL in .env for Telegram webhooks"
   fi
-elif pgrep -x "ngrok" &>/dev/null; then
-  echo "ℹ️  ngrok already running"
+elif [[ "$CF_STATUS" == "not_found" ]]; then
+  echo "ℹ️  Cloudflare Tunnel: not configured (set CLOUDFLARE_TUNNEL_TOKEN in .env)"
+else
+  echo "⚠️  Cloudflare Tunnel: $CF_STATUS — check logs: docker compose logs cloudflared"
 fi
 
 # ── Open browser ──────────────────────────────────────────────────────────────
 sleep 1
 if [[ "${OSTYPE:-}" == darwin* ]]; then
-  open "http://localhost:3000" 2>/dev/null || true
+  open "http://localhost:${NGINX_PORT}" 2>/dev/null || true
 elif command -v xdg-open &>/dev/null; then
-  xdg-open "http://localhost:3000" 2>/dev/null || true
+  xdg-open "http://localhost:${NGINX_PORT}" 2>/dev/null || true
 fi

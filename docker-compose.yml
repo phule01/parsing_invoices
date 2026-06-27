@@ -7,8 +7,6 @@ services:
       args:
         REACT_APP_API_URL: ${REACT_APP_API_URL:-http://localhost:8000}
     container_name: tool_orc_web
-    ports:
-      - "3000:80"
     depends_on:
       fastapi:
         condition: service_healthy
@@ -16,7 +14,7 @@ services:
       - tool_orc_network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1/"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -65,12 +63,11 @@ services:
       PYTHONUNBUFFERED: "1"
       DEBUG: ${DEBUG:-False}
       ENVIRONMENT: ${ENVIRONMENT:-production}
+      TELEGRAM_WEBHOOK_URL: ${TELEGRAM_WEBHOOK_URL:-}
       SECRET_KEY: ${SECRET_KEY}
       USER1_USERNAME: ${USER1_USERNAME:-admin}
       USER2_USERNAME: ${USER2_USERNAME:-user}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
-    ports:
-      - "${API_PORT:-8000}:8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -136,6 +133,44 @@ services:
       options:
         max-size: "20m"
         max-file: "5"
+
+  # ── Cloudflare Tunnel (replaces ngrok) ────────────────────────────────────
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: tool_orc_cloudflared
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    networks:
+      - tool_orc_network
+    restart: unless-stopped
+    depends_on:
+      fastapi:
+        condition: service_healthy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+  nginx:
+    image: nginx:alpine
+    container_name: tool_orc_nginx
+    ports:
+      - "7300:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      web:
+        condition: service_healthy
+      fastapi:
+        condition: service_healthy
+    networks:
+      - tool_orc_network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"
 
 volumes:
   postgres_data:

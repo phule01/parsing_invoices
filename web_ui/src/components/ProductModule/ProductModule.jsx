@@ -3,6 +3,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useWebSocket } from '../../context/WebSocketContext';
 import './ProductModule.css';
 
+const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+
 function ProductModule() {
   const { token } = useAuth();
   const { subscribe } = useWebSocket();
@@ -32,7 +34,7 @@ function ProductModule() {
     setError('');
     
     try {
-      let url = 'http://localhost:8000/api/products/?limit=100';
+      let url = `${API_BASE}/api/products/?limit=100`;
       if (categoryFilter) url += `&category=${categoryFilter}`;
       if (searchTerm) url += `&search=${searchTerm}`;
 
@@ -55,7 +57,7 @@ function ProductModule() {
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/products/categories', {
+        const response = await fetch(`${API_BASE}/api/products/categories`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (response.ok) {
@@ -105,7 +107,7 @@ function ProductModule() {
     const { productId, productName } = deleteModal;
     
     try {
-      const response = await fetch(`http://localhost:8000/api/products/${productId}`, {
+      const response = await fetch(`${API_BASE}/api/products/${productId}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${token}`
@@ -132,7 +134,7 @@ function ProductModule() {
     e.preventDefault();
     
     try {
-      const response = await fetch('http://localhost:8000/api/products/', {
+      const response = await fetch(`${API_BASE}/api/products/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

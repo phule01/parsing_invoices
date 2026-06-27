@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import './SettingsModule.css';
 
+const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+
 function SettingsModule() {
   const { token, user } = useAuth();
   const [loading, setLoading] = useState(false);
@@ -23,7 +25,7 @@ function SettingsModule() {
   useEffect(() => {
     const fetchSettings = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/settings/', {
+        const response = await fetch(`${API_BASE}/api/settings/`, {
           headers: { Authorization: `Bearer ${token}` }
         });
 
@@ -60,7 +62,7 @@ function SettingsModule() {
     setSuccess('');
 
     try {
-      const response = await fetch('http://localhost:8000/api/settings/update', {
+      const response = await fetch(`${API_BASE}/api/settings/update`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -91,7 +93,7 @@ function SettingsModule() {
     setError('');
 
     try {
-      const response = await fetch('http://localhost:8000/api/settings/test-email?email_address=' + encodeURIComponent(settings.EMAIL_ADDRESS), {
+      const response = await fetch(`${API_BASE}/api/settings/test-email?email_address=` + encodeURIComponent(settings.EMAIL_ADDRESS), {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -118,7 +120,7 @@ function SettingsModule() {
     setError('');
 
     try {
-      const response = await fetch('http://localhost:8000/api/settings/test-telegram', {
+      const response = await fetch(`${API_BASE}/api/settings/test-telegram`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });

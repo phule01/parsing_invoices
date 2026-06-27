@@ -134,15 +134,21 @@ api = FastAPI(
 # uvicorn is told to use "main:api" in the CMD below.
 
 # CORS
+_cors_origins = [
+    "http://localhost",
+    "http://localhost:3000",
+    "http://localhost:8000",
+    "http://localhost:8080",
+]
+# Add dynamic origins from environment (e.g., Cloudflare Tunnel domain)
+for _env_key in ("FRONTEND_URL", "CORS_ALLOWED_ORIGIN", "REACT_APP_API_URL"):
+    _val = os.getenv(_env_key, "")
+    if _val and _val not in _cors_origins:
+        _cors_origins.append(_val)
+
 api.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost",
-        "http://localhost:3000",
-        "http://localhost:8000",
-        "http://localhost:8080",
-        os.getenv("FRONTEND_URL", "http://localhost:3000"),
-    ],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

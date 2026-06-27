@@ -7,6 +7,14 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(100) UNIQUE NOT NULL,
     hashed_password VARCHAR(255) NOT NULL,
     is_active BOOLEAN DEFAULT True,
+    is_admin BOOLEAN DEFAULT False,
+    -- Credentials for email and integrations (only used by admin)
+    email_password VARCHAR(255),
+    gemini_api_key VARCHAR(500),
+    telegram_bot_token VARCHAR(500),
+    telegram_chat_id VARCHAR(100),
+    imap_server VARCHAR(100),
+    smtp_server VARCHAR(100),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

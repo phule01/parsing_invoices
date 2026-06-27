@@ -1,3 +1,32 @@
 .env
 .env.bak
-.gitignore
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Node
+node_modules/
+web_ui/build/
+web_ui/node_modules/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Invoice files (downloaded attachments)
+email_listener/invoices/*.pdf
+email_listener/invoices/*.xml
+
+# Docker
+*.log
