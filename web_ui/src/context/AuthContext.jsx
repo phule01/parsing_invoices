@@ -28,6 +28,7 @@ export function AuthProvider({ children }) {
       });
       
       if (response.ok) {
+        const data = await response.json();
         // Token is valid, fetch user info
         const userResponse = await fetch(`${API_BASE}/api/auth/me`, {
           headers: { Authorization: `Bearer ${token}` }
@@ -35,7 +36,11 @@ export function AuthProvider({ children }) {
         
         if (userResponse.ok) {
           const userData = await userResponse.json();
-          setUser(userData);
+          // Merge validate-token is_admin if not in userData
+          setUser({
+            ...userData,
+            is_admin: userData.is_admin ?? data.is_admin
+          });
           setToken(token);
           setLoading(false);
         } else {
@@ -76,7 +81,8 @@ export function AuthProvider({ children }) {
       setToken(data.access_token);
       setUser({
         id: data.user_id,
-        username: data.username
+        username: data.username,
+        is_admin: data.is_admin
       });
       
       return data;

@@ -126,6 +126,9 @@ api = FastAPI(
     description="Invoice management system with email integration",
     version="2.0.0",
     lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
 )
 
 # ── IMPORTANT: the FastAPI instance is named `api`, not `app`.
@@ -189,7 +192,6 @@ async def root():
     return {
         "message": "Tool ORC Invoice API",
         "version": "2.0.0",
-        "docs": "/docs",
         "health": "/health",
     }
 

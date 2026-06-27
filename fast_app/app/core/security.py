@@ -47,14 +47,6 @@ SECRET_KEY: str = os.getenv(
 ALGORITHM: str = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
 
-# Exactly 2 users are allowed — configured via environment variables
-ALLOWED_USERS: frozenset[str] = frozenset(
-    {
-        os.getenv("USER1_USERNAME", "admin").lower(),
-        os.getenv("USER2_USERNAME", "user").lower(),
-    }
-)
-
 _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
@@ -73,6 +65,7 @@ def verify_password(plain: str, hashed: str) -> bool:
 def create_access_token(
     user_id: int,
     username: str,
+    is_admin: bool = False,
     expires_delta: Optional[timedelta] = None,
 ) -> str:
     """
@@ -81,6 +74,7 @@ def create_access_token(
     Payload shape:
       sub      — user_id (int)   primary identity claim
       username — username (str)  human-readable, used for logging
+      is_admin — bool            admin role flag
       iat      — issued-at
       exp      — expiry
     """
@@ -89,6 +83,7 @@ def create_access_token(
     payload = {
         "sub": user_id,
         "username": username,
+        "is_admin": is_admin,
         "iat": now,
         "exp": expire,
     }
@@ -121,39 +116,20 @@ def decode_token(token: str) -> dict:
     if user_id is None:
         raise _401
 
-    return {"user_id": int(user_id), "username": payload.get("username", "")}
-
-
-# ── 2-user access control ─────────────────────────────────────────────────────
-
-def is_user_allowed(username: str) -> bool:
-    """Return True only if username is one of the two configured allowed users."""
-    return username.lower() in ALLOWED_USERS
-
-
-def enforce_2user_limit(db: Session) -> bool:
-    """Return True when the active user count is within the 2-user limit."""
-    return db.query(User).filter(User.is_active.is_(True)).count() <= 2
-
-
-def get_allowed_usernames() -> tuple[str, str]:
-    """Return the two allowed usernames as a tuple (user1, user2)."""
-    return (
-        os.getenv("USER1_USERNAME", "admin"),
-        os.getenv("USER2_USERNAME", "user"),
-    )
+    return {
+        "user_id": int(user_id), 
+        "username": payload.get("username", ""),
+        "is_admin": payload.get("is_admin", False)
+    }
 
 
 # ── Authentication ────────────────────────────────────────────────────────────
 
 def authenticate_user(username: str, password: str, db: Session) -> Optional[User]:
     """
-    Validate credentials against the database, enforcing the 2-user allow list.
+    Validate credentials against the database.
     Returns the User on success, None on any failure (caller raises 401).
     """
-    if not is_user_allowed(username):
-        logger.warning("Login attempt by non-allowed user: %s", username)
-        return None
 
     user = db.query(User).filter(User.username == username).first()
     if not user:
@@ -194,14 +170,6 @@ def get_current_user(
     """
     token = get_token_from_request(request)
     data = decode_token(token)
-
-    if not is_user_allowed(data["username"]):
-        logger.warning("Allowed-list check failed for: %s", data["username"])
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
 
     user = db.query(User).filter(User.id == data["user_id"]).first()
     if not user:

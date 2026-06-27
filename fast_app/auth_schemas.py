@@ -34,6 +34,7 @@ class TokenResponse(BaseModel):
     token_type: str
     user_id: int
     username: str
+    is_admin: bool
     expires_in: int  # seconds
 
 class UserResponse(BaseModel):
@@ -42,6 +43,7 @@ class UserResponse(BaseModel):
     username: str
     email: str
     is_active: bool
+    is_admin: bool
     created_at: datetime
     
     class Config:

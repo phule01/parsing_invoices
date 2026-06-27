@@ -23,8 +23,6 @@ from app.core.security import (
     authenticate_user,
     create_access_token,
     decode_token,
-    enforce_2user_limit,
-    get_allowed_usernames,
     get_current_user,
     get_token_from_request,
     hash_password,
@@ -55,6 +53,7 @@ async def login(credentials: UserLogin, db: Session = Depends(get_db)):
     token = create_access_token(
         user_id=user.id,
         username=user.username,
+        is_admin=user.is_admin,
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
     )
     return TokenResponse(
@@ -62,28 +61,26 @@ async def login(credentials: UserLogin, db: Session = Depends(get_db)):
         token_type="bearer",
         user_id=user.id,
         username=user.username,
+        is_admin=user.is_admin,
         expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )
 
 
 # ── Register ──────────────────────────────────────────────────────────────────
 
-@router.post("/register", response_model=TokenResponse)
-async def register(user_data: UserRegister, db: Session = Depends(get_db)):
+@router.post("/register", response_model=UserResponse)
+async def register(
+    user_data: UserRegister, 
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """
-    Register a new user. Restricted to the two usernames in ALLOWED_USERS.
+    Register a new standard user. Restricted to Admins only.
     """
-    u1, u2 = get_allowed_usernames()
-    if user_data.username.lower() not in {u1.lower(), u2.lower()}:
-        log_audit(
-            db,
-            action="UNAUTHORIZED_REGISTRATION",
-            details=f"Attempted registration of non-allowed user: {user_data.username}",
-            status_code=403,
-        )
+    if not current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only the two configured users may register",
+            detail="Only administrators can create new users",
         )
 
     if db.query(User).filter(User.username == user_data.username).first():
@@ -92,30 +89,21 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
     if db.query(User).filter(User.email == user_data.email).first():
         raise HTTPException(status_code=400, detail="Email already registered")
 
-    if not enforce_2user_limit(db):
-        raise HTTPException(status_code=403, detail="Maximum user count (2) reached")
-
     new_user = User(
         username=user_data.username,
         email=user_data.email,
         hashed_password=hash_password(user_data.password),
         is_active=True,
+        is_admin=False,
     )
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
 
-    log_audit(db, user_id=new_user.id, action="REGISTRATION",
-              details=f"User {user_data.username} registered")
+    log_audit(db, user_id=current_user.id, action="CREATE_USER",
+              details=f"Admin {current_user.username} created user {user_data.username}")
 
-    token = create_access_token(user_id=new_user.id, username=new_user.username)
-    return TokenResponse(
-        access_token=token,
-        token_type="bearer",
-        user_id=new_user.id,
-        username=new_user.username,
-        expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-    )
+    return new_user
 
 
 # ── Admin Setup ───────────────────────────────────────────────────────────────
@@ -161,12 +149,17 @@ async def admin_setup(admin_data: AdminRegister, db: Session = Depends(get_db)):
     log_audit(db, user_id=admin_user.id, action="ADMIN_SETUP",
               details="Admin account created with system credentials")
 
-    token = create_access_token(user_id=admin_user.id, username=admin_user.username)
+    token = create_access_token(
+        user_id=admin_user.id, 
+        username=admin_user.username,
+        is_admin=admin_user.is_admin
+    )
     return TokenResponse(
         access_token=token,
         token_type="bearer",
         user_id=admin_user.id,
         username=admin_user.username,
+        is_admin=admin_user.is_admin,
         expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )
 
@@ -187,7 +180,7 @@ async def validate_token(request: Request):
     """Lightweight check that a token is still valid. Used by the frontend on load."""
     token = get_token_from_request(request)
     data = decode_token(token)       # raises 401 on failure
-    return {"valid": True, "user_id": data["user_id"]}
+    return {"valid": True, "user_id": data["user_id"], "is_admin": data.get("is_admin", False)}
 
 
 # ── Logout ────────────────────────────────────────────────────────────────────

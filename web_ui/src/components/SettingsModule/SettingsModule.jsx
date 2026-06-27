@@ -10,6 +10,12 @@ function SettingsModule() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [testInProgress, setTestInProgress] = useState('');
+  
+  // User Management State
+  const [newUser, setNewUser] = useState({ username: '', email: '', password: '' });
+  const [userLoading, setUserLoading] = useState(false);
+  const [userSuccess, setUserSuccess] = useState('');
+  const [userError, setUserError] = useState('');
 
   const [settings, setSettings] = useState({
     EMAIL_ADDRESS: '',
@@ -28,11 +34,6 @@ function SettingsModule() {
         const response = await fetch(`${API_BASE}/api/settings/`, {
           headers: { Authorization: `Bearer ${token}` }
         });
-
-        if (response.status === 403) {
-          setError('Only admin users can access settings');
-          return;
-        }
 
         if (!response.ok) throw new Error('Failed to fetch settings');
 
@@ -136,6 +137,64 @@ function SettingsModule() {
       setTestInProgress('');
     }
   };
+
+  const handleCreateUser = async (e) => {
+    e.preventDefault();
+    setUserLoading(true);
+    setUserError('');
+    setUserSuccess('');
+
+    try {
+      const response = await fetch(`${API_BASE}/api/auth/register`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(newUser),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.detail || 'Failed to create user');
+      }
+
+      setUserSuccess(`✅ User ${newUser.username} created successfully!`);
+      setNewUser({ username: '', email: '', password: '' });
+      setTimeout(() => setUserSuccess(''), 5000);
+    } catch (err) {
+      setUserError(`❌ Error: ${err.message}`);
+    } finally {
+      setUserLoading(false);
+    }
+  };
+
+  if (!user?.is_admin) {
+    return (
+      <div className="settings-module">
+        <h2>ℹ️ System Information</h2>
+        <p>👤 Standard users have read-only access to basic system info.</p>
+
+        <div className="settings-info">
+          <h3>System Email Configuration</h3>
+          <p>
+            <strong>Email Address:</strong> {settings.EMAIL_ADDRESS || 'Not configured'}
+          </p>
+          <p>
+            <strong>IMAP Server:</strong> {settings.IMAP_SERVER || 'Not configured'}
+          </p>
+          <p>
+            <strong>SMTP Server:</strong> {settings.SMTP_SERVER || 'Not configured'}
+          </p>
+        </div>
+        
+        <div className="settings-info" style={{marginTop: '20px'}}>
+          <h3>⚠️ Access Restricted</h3>
+          <p>System settings (API keys, bot tokens, app passwords) and User Management can only be modified by administrators. Please contact an admin if you need these details updated.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="settings-module">
@@ -310,6 +369,62 @@ function SettingsModule() {
           <li>📋 Only admin users can modify these settings</li>
         </ul>
       </div>
+
+      <hr style={{margin: '40px 0', border: '1px solid #eee'}} />
+
+      <h2>👥 User Management</h2>
+      <p className="admin-only">👤 Admin only - Create standard user accounts</p>
+
+      {userError && <div className="error-message">{userError}</div>}
+      {userSuccess && <div className="success-message">{userSuccess}</div>}
+
+      <form onSubmit={handleCreateUser} className="settings-form">
+        <fieldset className="settings-section">
+          <legend>➕ Add New User</legend>
+
+          <div className="form-group">
+            <label htmlFor="new_username">Username</label>
+            <input
+              id="new_username"
+              type="text"
+              value={newUser.username}
+              onChange={(e) => setNewUser({...newUser, username: e.target.value})}
+              placeholder="Username"
+              required
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="new_email">Email</label>
+            <input
+              id="new_email"
+              type="email"
+              value={newUser.email}
+              onChange={(e) => setNewUser({...newUser, email: e.target.value})}
+              placeholder="user@example.com"
+              required
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="new_password">Password</label>
+            <input
+              id="new_password"
+              type="password"
+              value={newUser.password}
+              onChange={(e) => setNewUser({...newUser, password: e.target.value})}
+              placeholder="••••••••"
+              required
+            />
+          </div>
+
+          <div className="form-actions">
+            <button type="submit" disabled={userLoading} className="btn-primary">
+              {userLoading ? '⏳ Creating...' : '➕ Create User'}
+            </button>
+          </div>
+        </fieldset>
+      </form>
     </div>
   );
 }

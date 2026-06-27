@@ -20,9 +20,9 @@ ENV_FILE = Path(__file__).parent.parent.parent / ".env"
 
 
 def _is_admin(db: Session, user_id: int) -> bool:
-    """Check if user is admin (username is 'admin')"""
+    """Check if user is admin"""
     user = db.query(User).filter(User.id == user_id).first()
-    return user and user.username.lower() == "admin"
+    return user and user.is_admin
 
 
 class SettingsUpdate:
@@ -36,26 +36,33 @@ class SettingsUpdate:
 
 @router.get("/")
 async def get_settings(request, db: Session = Depends(get_db)):
-    """Get current settings (admins only)"""
+    """Get current settings. Admins see all, standard users see limited info."""
     from app.core.security import get_token_from_request, decode_token
     
     token = get_token_from_request(request)
     data = decode_token(token)
     
-    if not _is_admin(db, data["user_id"]):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only admins can view settings"
-        )
+    is_admin = _is_admin(db, data["user_id"])
     
-    return {
-        "EMAIL_ADDRESS": os.getenv("EMAIL_ADDRESS", ""),
-        "GEMINI_API_KEY": os.getenv("GEMINI_API_KEY", ""),
-        "TELEGRAM_BOT_TOKEN": os.getenv("TELEGRAM_BOT_TOKEN", ""),
-        "TELEGRAM_CHAT_ID": os.getenv("TELEGRAM_CHAT_ID", ""),
-        "IMAP_SERVER": os.getenv("IMAP_SERVER", ""),
-        "SMTP_SERVER": os.getenv("SMTP_SERVER", ""),
-    }
+    if is_admin:
+        return {
+            "EMAIL_ADDRESS": os.getenv("EMAIL_ADDRESS", ""),
+            "GEMINI_API_KEY": os.getenv("GEMINI_API_KEY", ""),
+            "TELEGRAM_BOT_TOKEN": os.getenv("TELEGRAM_BOT_TOKEN", ""),
+            "TELEGRAM_CHAT_ID": os.getenv("TELEGRAM_CHAT_ID", ""),
+            "IMAP_SERVER": os.getenv("IMAP_SERVER", ""),
+            "SMTP_SERVER": os.getenv("SMTP_SERVER", ""),
+        }
+    else:
+        # Standard users only see the email address to verify it's working
+        return {
+            "EMAIL_ADDRESS": os.getenv("EMAIL_ADDRESS", ""),
+            "IMAP_SERVER": os.getenv("IMAP_SERVER", ""),
+            "SMTP_SERVER": os.getenv("SMTP_SERVER", ""),
+            "GEMINI_API_KEY": "",
+            "TELEGRAM_BOT_TOKEN": "",
+            "TELEGRAM_CHAT_ID": "",
+        }
 
 
 @router.post("/update")

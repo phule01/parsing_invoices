@@ -37,7 +37,7 @@ from app.services.telegram_service import (
 from telegram_conversation import (
     start_conversation, get_conversation_state, get_conversation_data,
     update_conversation_data, end_conversation,
-    STATE_IDLE, STATE_ADD_USERNAME, STATE_ADD_EMAIL, STATE_ADD_PASSWORD,
+    STATE_IDLE, STATE_ADD_USERNAME, STATE_ADD_EMAIL, STATE_ADD_PASSWORD, STATE_ADD_ROLE,
     STATE_DELETE_USERNAME, STATE_CHANGE_USERNAME, STATE_CHANGE_PASSWORD,
 )
 
@@ -279,11 +279,22 @@ async def handle_account_command(text: str, chat_id: int, db: Session) -> dict:
         if not users:
             msg = "No accounts found."
         else:
-            lines = [
-                f"• {u.username} | {u.email} | {'✅ Active' if u.is_active else '❌ Inactive'}"
-                for u in users
-            ]
-            msg = "<b>👥 All Accounts</b>\n" + "\n".join(lines)
+            admins = [u for u in users if u.is_admin]
+            standard = [u for u in users if not u.is_admin]
+            
+            msg = "<b>👥 Accounts Overview</b>\n\n"
+            msg += "<b>👑 Admin Accounts</b>\n"
+            if admins:
+                msg += "\n".join([f"• {u.username} | {u.email} | {'✅ Active' if u.is_active else '❌ Inactive'}" for u in admins])
+            else:
+                msg += "<i>None</i>"
+                
+            msg += "\n\n<b>👤 Standard Users</b>\n"
+            if standard:
+                msg += "\n".join([f"• {u.username} | {u.email} | {'✅ Active' if u.is_active else '❌ Inactive'}" for u in standard])
+            else:
+                msg += "<i>None</i>"
+                
         await send_message(msg, chat_id=str(chat_id))
         return {"status": "ok"}
 
@@ -331,7 +342,7 @@ async def handle_account_command(text: str, chat_id: int, db: Session) -> dict:
 
     # Multi-step flows
     if command == "/addaccount" or current_state in (
-        STATE_ADD_USERNAME, STATE_ADD_EMAIL, STATE_ADD_PASSWORD
+        STATE_ADD_USERNAME, STATE_ADD_EMAIL, STATE_ADD_PASSWORD, STATE_ADD_ROLE
     ):
         return await _add_account_flow(text, chat_id, db)
 
@@ -395,19 +406,41 @@ async def _add_account_flow(text: str, chat_id: int, db: Session) -> dict:
         if len(password) < 4:
             await send_message("❌ Password must be at least 4 characters.\n\nTry again:", chat_id=str(chat_id))
             return {"status": "invalid"}
+        update_conversation_data(chat_id, "password", password)
+        start_conversation(chat_id, STATE_ADD_ROLE, get_conversation_data(chat_id))
+        
+        # Create an inline keyboard to choose the role (or just text reply)
+        # We will just ask for text reply for simplicity and consistency with other states.
+        await send_message(
+            f"✅ Password set\n\nStep 4️⃣: Should this account be an Admin?\nReply with <b>yes</b> or <b>no</b>:", 
+            chat_id=str(chat_id)
+        )
+        return {"status": "ok"}
+        
+    if state == STATE_ADD_ROLE:
+        role_resp = text.strip().lower()
+        if role_resp not in ("yes", "no", "y", "n"):
+            await send_message("❌ Please reply with 'yes' or 'no':", chat_id=str(chat_id))
+            return {"status": "invalid"}
+            
+        is_admin = role_resp in ("yes", "y")
+        
         data = get_conversation_data(chat_id)
         new_user = User(
             username=data["username"],
             email=data["email"],
-            hashed_password=hash_password(password),
+            hashed_password=hash_password(data["password"]),
             is_active=True,
+            is_admin=is_admin,
         )
         db.add(new_user)
         db.commit()
         db.refresh(new_user)
         end_conversation(chat_id)
+        
+        role_str = "👑 Admin" if is_admin else "👤 Standard User"
         await send_message(
-            f"✅ <b>Account Created!</b>\n\nUsername: <b>{data['username']}</b>\nEmail: <b>{data['email']}</b>",
+            f"✅ <b>Account Created!</b>\n\nUsername: <b>{data['username']}</b>\nEmail: <b>{data['email']}</b>\nRole: <b>{role_str}</b>",
             chat_id=str(chat_id),
         )
         return {"status": "ok", "user_id": new_user.id}

@@ -101,9 +101,6 @@ docker compose -f "$COMPOSE_FILE" ps
 
 echo "🌐 Access Points:"
 echo "  • Web UI:   http://localhost:${NGINX_PORT}"
-echo "  • API Docs: http://localhost:${NGINX_PORT}/api/docs"
-echo "  • API:      http://localhost:${NGINX_PORT}/api"
-echo ""
 echo "📖 Useful Commands (Docker Compose v2):"
 echo "  docker compose stop                    # Stop (keeps data)"
 echo "  docker compose start                   # Resume"
