@@ -36,8 +36,7 @@ echo "🐳 Docker Compose v2 (version: $COMPOSE_VER)"
 if [ ! -f ".env" ]; then
   echo "⚠️  .env not found — copying from .env-example"
   cp .env-example .env
-  echo "✏️  Edit .env with your credentials, then re-run this script."
-  exit 1
+  echo "ℹ️  Created .env with default settings. You can configure the system later via the Web UI Settings."
 fi
 
 # ── Load port config ──────────────────────────────────────────────────────────

@@ -11,7 +11,7 @@
  * Any change to the base URL, headers, or error shape now happens once.
  */
 
-const BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+const BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === 'development' ? 'http://localhost:8000' : '');
 
 /** @param {string} token */
 const authHeaders = (token) => ({

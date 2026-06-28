@@ -15,7 +15,15 @@ export function WebSocketProvider({ children }) {
 
     const connectWebSocket = () => {
       try {
-        const wsUrl = `ws://localhost:8000/api/ws/updates?token=${token}`;
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        let wsUrl = `${protocol}//${window.location.host}/api/ws/updates?token=${token}`;
+        
+        if (process.env.REACT_APP_API_URL) {
+           const baseUrl = process.env.REACT_APP_API_URL.replace(/^http/, 'ws');
+           wsUrl = `${baseUrl}/api/ws/updates?token=${token}`;
+        } else if (process.env.NODE_ENV === 'development') {
+           wsUrl = `ws://localhost:8000/api/ws/updates?token=${token}`;
+        }
         const websocket = new WebSocket(wsUrl);
 
         websocket.onopen = () => {

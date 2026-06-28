@@ -3,7 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useWebSocket } from '../../context/WebSocketContext';
 import './ProductModule.css';
 
-const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === 'development' ? 'http://localhost:8000' : '');
 
 function ProductModule() {
   const { token } = useAuth();

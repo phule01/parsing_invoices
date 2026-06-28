@@ -12,7 +12,7 @@ import { useAuth } from '../../context/AuthContext';
  * - Inventory statistics summary
  * - Product audit history view
  */
-const InventoryDashboard = ({ apiBaseUrl = 'http://localhost:8000/api' }) => {
+const InventoryDashboard = ({ apiBaseUrl = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === 'development' ? 'http://localhost:8000/api' : '/api') }) => {
   const { token } = useAuth();
   const [inventory, setInventory] = useState([]);
   const [summary, setSummary] = useState(null);
