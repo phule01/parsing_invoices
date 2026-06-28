@@ -26,9 +26,7 @@ from models import User, Invoice, Product
 from app.core.security import hash_password
 from app.services.invoice_service import InvoiceService
 from app.services.telegram_service import (
-    TELEGRAM_BOT_TOKEN,
     TELEGRAM_API_URL,
-    TELEGRAM_CHAT_ID,
     send_message,
     edit_message,
     broadcast_to_web_ui,
@@ -60,7 +58,8 @@ USAGE_TEXT = (
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _is_authorized_chat(chat_id: int) -> bool:
-    return bool(TELEGRAM_CHAT_ID) and str(chat_id) == str(TELEGRAM_CHAT_ID)
+    configured_chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
+    return bool(configured_chat_id) and str(chat_id) == configured_chat_id
 
 
 def _parse_command(text: str) -> Tuple[str, list]:
@@ -151,12 +150,13 @@ async def handle_invoice_callback(
         )
 
     # ── Edit the original Telegram message to remove buttons ──────────────────
-    if not TELEGRAM_BOT_TOKEN:
+    bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+    if not bot_token:
         return {"status": "error", "msg": "TELEGRAM_BOT_TOKEN not configured"}
 
     async with httpx.AsyncClient(timeout=10) as client:
         await client.post(
-            f"{TELEGRAM_API_URL}/bot{TELEGRAM_BOT_TOKEN}/editMessageText",
+            f"{TELEGRAM_API_URL}/bot{bot_token}/editMessageText",
             json={
                 "chat_id": chat_id,
                 "message_id": message_id,
@@ -166,7 +166,7 @@ async def handle_invoice_callback(
             },
         )
         await client.post(
-            f"{TELEGRAM_API_URL}/bot{TELEGRAM_BOT_TOKEN}/answerCallbackQuery",
+            f"{TELEGRAM_API_URL}/bot{bot_token}/answerCallbackQuery",
             json={"callback_query_id": callback_id},
         )
 
