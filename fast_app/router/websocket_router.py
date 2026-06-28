@@ -18,6 +18,7 @@ async def websocket_endpoint(
     WebSocket endpoint for real-time updates.
     Connects to receive real-time notifications for invoice and product changes.
     """
+    user_id = None
     try:
         # Verify token and get user ID
         token_data = decode_token(token)
@@ -52,5 +53,6 @@ async def websocket_endpoint(
     
     finally:
         # Disconnect and cleanup
-        await connection_manager.disconnect(user_id, websocket)
-        logger.info(f"WebSocket disconnected for user {user_id}")
+        if user_id is not None:
+            await connection_manager.disconnect(user_id, websocket)
+            logger.info(f"WebSocket disconnected for user {user_id}")

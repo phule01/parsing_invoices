@@ -184,7 +184,7 @@ async def health_check():
 
 @api.get("/api/telegram/status")
 async def telegram_status():
-    return get_telegram_status()
+    return await get_telegram_status()
 
 
 @api.get("/")

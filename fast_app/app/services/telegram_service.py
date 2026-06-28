@@ -270,11 +270,25 @@ async def send_parse_failure_notification(file_name: str, error_message: str) ->
 
 # ── Utility ───────────────────────────────────────────────────────────────────
 
-def get_telegram_status() -> dict:
-    return {
+async def get_telegram_status() -> dict:
+    status = {
         "configured": bool(TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID),
         "bot_token_set": bool(TELEGRAM_BOT_TOKEN),
         "chat_id_set": bool(TELEGRAM_CHAT_ID),
         "chat_id": TELEGRAM_CHAT_ID or "Not set",
         "api_url": TELEGRAM_API_URL,
+        "webhook_info": None
     }
+    
+    if TELEGRAM_BOT_TOKEN:
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(f"{TELEGRAM_API_URL}/bot{TELEGRAM_BOT_TOKEN}/getWebhookInfo")
+                if resp.status_code == 200:
+                    status["webhook_info"] = resp.json().get("result")
+                else:
+                    status["webhook_info"] = {"error": f"HTTP {resp.status_code}", "detail": resp.text}
+        except Exception as e:
+            status["webhook_info"] = {"error": str(e)}
+            
+    return status
