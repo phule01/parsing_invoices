@@ -84,12 +84,10 @@ async def update_settings(
         )
     
     try:
-        # Update .env file with new values
-        for key, value in data.items():
-            if value:  # Only update if value is provided
-                set_key(ENV_FILE, key, str(value))
-                os.environ[key] = str(value)
-                logger.info(f"✅ Updated setting: {key}")
+        # Update .env file with new values using in-place writer to preserve Docker inode
+        from app.core.env_utils import update_env_file_in_place
+        update_env_file_in_place(str(ENV_FILE), data)
+        logger.info(f"✅ Updated settings: {list(data.keys())}")
         
         return {
             "status": "success",

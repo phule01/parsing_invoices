@@ -166,10 +166,8 @@ async def admin_setup(admin_data: AdminRegister, db: Session = Depends(get_db)):
             "SMTP_SERVER": admin_data.smtp_server,
         }
         
-        for key, value in env_updates.items():
-            if value:
-                set_key(env_file, key, str(value))
-                os.environ[key] = str(value)
+        from app.core.env_utils import update_env_file_in_place
+        update_env_file_in_place(str(env_file), env_updates)
     except Exception as e:
         import logging
         logging.getLogger(__name__).error(f"Failed to update .env during admin setup: {e}")
