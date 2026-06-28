@@ -19,16 +19,10 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
 # Copy application code
 COPY . .
 
-# Create non-root user, set proper permissions, and create writable directory
-RUN useradd -m -u 1000 appuser && \
-    chown -R appuser:appuser /app && \
-    mkdir -p /app/invoices && \
-    chown -R appuser:appuser /app/invoices && \
-    chmod -R 755 /app/invoices
+# Ensure directory exists for invoices
+RUN mkdir -p /app/invoices
 
 ENV DOWNLOAD_DIR=/app/invoices
-
-USER appuser
 
 # Run the email processor
 CMD ["python", "main.py"]
