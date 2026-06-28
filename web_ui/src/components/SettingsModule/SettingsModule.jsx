@@ -94,9 +94,18 @@ function SettingsModule() {
     setError('');
 
     try {
-      const response = await fetch(`${API_BASE}/api/settings/test-email?email_address=` + encodeURIComponent(settings.EMAIL_ADDRESS), {
+      const response = await fetch(`${API_BASE}/api/settings/test-email`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          target_email: settings.EMAIL_ADDRESS,
+          email_address: settings.EMAIL_ADDRESS,
+          email_password: settings.EMAIL_PASSWORD || '',
+          smtp_server: settings.SMTP_SERVER || 'smtp.gmail.com'
+        })
       });
 
       if (!response.ok) {
@@ -126,7 +135,14 @@ function SettingsModule() {
     try {
       const response = await fetch(`${API_BASE}/api/settings/test-telegram`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          bot_token: settings.TELEGRAM_BOT_TOKEN,
+          chat_id: settings.TELEGRAM_CHAT_ID
+        })
       });
 
       if (!response.ok) throw new Error('Failed to send test message');

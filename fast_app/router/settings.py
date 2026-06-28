@@ -104,11 +104,21 @@ async def update_settings(
         )
 
 
+from pydantic import BaseModel
+
+class TestTelegramRequest(BaseModel):
+    bot_token: str
+    chat_id: str
+
 @router.post("/test-telegram")
-async def test_telegram(request: Request, db: Session = Depends(get_db)):
-    """Send test Telegram message (admins only)"""
+async def test_telegram(
+    payload: TestTelegramRequest,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Send test Telegram message using provided credentials (admins only)"""
     from app.core.security import get_token_from_request, decode_token
-    from app.services.telegram_service import send_message
+    import httpx
     
     token = get_token_from_request(request)
     decoded = decode_token(token)
@@ -120,11 +130,20 @@ async def test_telegram(request: Request, db: Session = Depends(get_db)):
         )
     
     try:
-        result = await send_message("✅ Test message from Invoice System")
-        if result:
-            return {"status": "success", "message": "Test message sent!"}
-        else:
-            return {"status": "error", "message": "Failed to send test message"}
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(
+                f"https://api.telegram.org/bot{payload.bot_token}/sendMessage",
+                json={
+                    "chat_id": payload.chat_id,
+                    "text": "✅ Test message from Invoice System using temporary settings!",
+                    "parse_mode": "HTML"
+                },
+            )
+            data = resp.json()
+            if resp.status_code == 200 and data.get("ok"):
+                return {"status": "success", "message": "Test message sent!"}
+            else:
+                return {"status": "error", "message": data.get("description", "Failed to send test message")}
     except Exception as e:
         logger.error(f"Error testing Telegram: {e}")
         raise HTTPException(
@@ -133,13 +152,19 @@ async def test_telegram(request: Request, db: Session = Depends(get_db)):
         )
 
 
+class TestEmailRequest(BaseModel):
+    target_email: str
+    email_address: str
+    email_password: str
+    smtp_server: str = "smtp.gmail.com"
+
 @router.post("/test-email")
 async def test_email(
-    email_address: str,
+    payload: TestEmailRequest,
     request: Request,
     db: Session = Depends(get_db)
 ):
-    """Send test email (admins only)"""
+    """Send test email using provided credentials (admins only)"""
     from app.core.security import get_token_from_request, decode_token
     import smtplib
     from email.mime.text import MIMEText
@@ -155,26 +180,24 @@ async def test_email(
         )
     
     try:
-        smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
-        smtp_port = int(os.getenv("SMTP_PORT", "587"))
-        sender_email = os.getenv("EMAIL_ADDRESS")
-        sender_password = os.getenv("EMAIL_PASSWORD")
+        # Default port 587
+        smtp_port = 587
         
         msg = MIMEMultipart()
-        msg["From"] = sender_email
-        msg["To"] = email_address
+        msg["From"] = payload.email_address
+        msg["To"] = payload.target_email
         msg["Subject"] = "Test Email from Invoice System"
         
-        body = "This is a test email to verify your email configuration is working correctly."
+        body = "This is a test email to verify your temporary email configuration is working correctly!"
         msg.attach(MIMEText(body, "plain"))
         
-        with smtplib.SMTP(smtp_server, smtp_port) as server:
+        with smtplib.SMTP(payload.smtp_server, smtp_port) as server:
             server.starttls()
-            server.login(sender_email, sender_password)
+            server.login(payload.email_address, payload.email_password)
             server.send_message(msg)
         
-        logger.info(f"✅ Test email sent to {email_address}")
-        return {"status": "success", "message": f"Test email sent to {email_address}"}
+        logger.info(f"✅ Test email sent to {payload.target_email}")
+        return {"status": "success", "message": f"Test email sent to {payload.target_email}"}
     except Exception as e:
         logger.error(f"Error sending test email: {e}")
         raise HTTPException(
