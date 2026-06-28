@@ -173,6 +173,13 @@ async def admin_setup(admin_data: AdminRegister, db: Session = Depends(get_db)):
     except Exception as e:
         import logging
         logging.getLogger(__name__).error(f"Failed to update .env during admin setup: {e}")
+        # Delete the admin user so they can try again once permissions are fixed
+        db.delete(admin_user)
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Admin account was NOT created because the server prevented writing to the .env file! Please run 'sudo chown 1000:1000 .env' on your server to fix Linux permissions. Technical error: {str(e)}"
+        )
 
     token = create_access_token(
         user_id=admin_user.id, 
