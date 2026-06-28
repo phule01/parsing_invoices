@@ -198,7 +198,7 @@ function SettingsModule() {
 
   return (
     <div className="settings-module">
-      <h2>⚙️ System Settings</h2>
+      <h2>⚙️ Change Setting</h2>
       <p className="admin-only">👤 Admin only - Configure system integrations</p>
 
       {error && <div className="error-message">{error}</div>}

@@ -44,7 +44,7 @@ async function parseResponse(res) {
  * @param {{ status?: string, search?: string, skip?: number, limit?: number }} params
  */
 export async function fetchInvoices(token, { status, search, skip = 0, limit = 100 } = {}) {
-  const url = new URL(`${BASE}/api/invoices/`);
+  const url = new URL(`${BASE}/api/invoices/`, window.location.origin);
   if (status) url.searchParams.set('status', status);
   if (search) url.searchParams.set('search', search);
   url.searchParams.set('skip', skip);

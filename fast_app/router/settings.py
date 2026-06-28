@@ -1,7 +1,7 @@
 """
 Settings router - allows admins to configure environment variables via API.
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 import os
 import logging
@@ -35,7 +35,7 @@ class SettingsUpdate:
 
 
 @router.get("/")
-async def get_settings(request, db: Session = Depends(get_db)):
+async def get_settings(request: Request, db: Session = Depends(get_db)):
     """Get current settings. Admins see all, standard users see limited info."""
     from app.core.security import get_token_from_request, decode_token
     
@@ -68,7 +68,7 @@ async def get_settings(request, db: Session = Depends(get_db)):
 @router.post("/update")
 async def update_settings(
     data: dict,
-    request,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """Update settings (admins only)"""
@@ -105,7 +105,7 @@ async def update_settings(
 
 
 @router.post("/test-telegram")
-async def test_telegram(request, db: Session = Depends(get_db)):
+async def test_telegram(request: Request, db: Session = Depends(get_db)):
     """Send test Telegram message (admins only)"""
     from app.core.security import get_token_from_request, decode_token
     from app.services.telegram_service import send_message
@@ -136,7 +136,7 @@ async def test_telegram(request, db: Session = Depends(get_db)):
 @router.post("/test-email")
 async def test_email(
     email_address: str,
-    request,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """Send test email (admins only)"""

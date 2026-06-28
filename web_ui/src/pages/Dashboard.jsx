@@ -47,7 +47,7 @@ function Dashboard() {
               className={`nav-item ${activeModule === 'settings' ? 'active' : ''}`}
               onClick={() => setActiveModule('settings')}
             >
-              ⚙️ Settings
+              ⚙️ Change Setting
             </button>
           </nav>
         </aside>
