@@ -28,8 +28,6 @@ from app.services.telegram_service import (           # noqa: F401
     send_error_notification,
     send_parse_failure_notification,
     get_telegram_status,
-    TELEGRAM_BOT_TOKEN,
-    TELEGRAM_CHAT_ID,
     TELEGRAM_API_URL,
 )
 

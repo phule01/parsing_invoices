@@ -99,7 +99,10 @@ function SettingsModule() {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (!response.ok) throw new Error('Failed to send test email');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || 'Failed to send test email');
+      }
 
       const data = await response.json();
       setSuccess(`✅ ${data.message}`);

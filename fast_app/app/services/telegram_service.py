@@ -33,14 +33,7 @@ logger = logging.getLogger(__name__)
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
-TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
-TELEGRAM_CHAT_ID: str = os.getenv("TELEGRAM_CHAT_ID", "")
 TELEGRAM_API_URL: str = "https://api.telegram.org"
-
-if not TELEGRAM_BOT_TOKEN:
-    logger.warning("⚠️  TELEGRAM_BOT_TOKEN not set — Telegram notifications disabled")
-if not TELEGRAM_CHAT_ID:
-    logger.warning("⚠️  TELEGRAM_CHAT_ID not set — Telegram notifications disabled")
 
 # Lazy-import to avoid circular dependency at module load time
 def _get_connection_manager():
@@ -72,10 +65,12 @@ async def send_message_with_metadata(
     Send a message and return {"ok": bool, "message_id": int|None, "chat_id": str|None}.
     Use this when you need the Telegram message_id to edit it later.
     """
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+    bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+    chat_id_target = chat_id or os.getenv("TELEGRAM_CHAT_ID", "").strip()
+    if not bot_token or not chat_id_target:
         return {"ok": False, "message_id": None, "chat_id": None}
 
-    target = chat_id or TELEGRAM_CHAT_ID
+    target = chat_id_target
     payload: dict = {"chat_id": target, "text": text, "parse_mode": "HTML"}
     if reply_markup:
         payload["reply_markup"] = reply_markup
@@ -83,7 +78,7 @@ async def send_message_with_metadata(
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.post(
-                f"{TELEGRAM_API_URL}/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
+                f"{TELEGRAM_API_URL}/bot{bot_token}/sendMessage",
                 json=payload,
             )
             resp.raise_for_status()
@@ -106,7 +101,8 @@ async def edit_message(
     reply_markup: Optional[dict] = None,
 ) -> bool:
     """Edit an existing Telegram message (e.g. to remove inline buttons after action)."""
-    if not TELEGRAM_BOT_TOKEN:
+    bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+    if not bot_token:
         return False
     payload: dict = {
         "chat_id": chat_id,
@@ -119,7 +115,7 @@ async def edit_message(
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.post(
-                f"{TELEGRAM_API_URL}/bot{TELEGRAM_BOT_TOKEN}/editMessageText",
+                f"{TELEGRAM_API_URL}/bot{bot_token}/editMessageText",
                 json=payload,
             )
             resp.raise_for_status()
@@ -271,19 +267,22 @@ async def send_parse_failure_notification(file_name: str, error_message: str) ->
 # ── Utility ───────────────────────────────────────────────────────────────────
 
 async def get_telegram_status() -> dict:
+    bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+    chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
+    
     status = {
-        "configured": bool(TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID),
-        "bot_token_set": bool(TELEGRAM_BOT_TOKEN),
-        "chat_id_set": bool(TELEGRAM_CHAT_ID),
-        "chat_id": TELEGRAM_CHAT_ID or "Not set",
+        "configured": bool(bot_token and chat_id),
+        "bot_token_set": bool(bot_token),
+        "chat_id_set": bool(chat_id),
+        "chat_id": chat_id or "Not set",
         "api_url": TELEGRAM_API_URL,
         "webhook_info": None
     }
     
-    if TELEGRAM_BOT_TOKEN:
+    if bot_token:
         try:
             async with httpx.AsyncClient(timeout=10) as client:
-                resp = await client.get(f"{TELEGRAM_API_URL}/bot{TELEGRAM_BOT_TOKEN}/getWebhookInfo")
+                resp = await client.get(f"{TELEGRAM_API_URL}/bot{bot_token}/getWebhookInfo")
                 if resp.status_code == 200:
                     status["webhook_info"] = resp.json().get("result")
                 else:

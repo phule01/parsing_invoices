@@ -84,9 +84,10 @@ async def setup_telegram_webhook():
     This is optional — if it fails, the app continues to work (though callbacks won't arrive).
     For local development, you may need to use ngrok or another tunneling service.
     """
-    from app.services.telegram_service import TELEGRAM_BOT_TOKEN, TELEGRAM_API_URL
+    from app.services.telegram_service import TELEGRAM_API_URL
     
-    if not TELEGRAM_BOT_TOKEN:
+    bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+    if not bot_token:
         logger.debug("⏭️  Skipping Telegram webhook setup — no bot token configured")
         return
 
@@ -101,7 +102,7 @@ async def setup_telegram_webhook():
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.post(
-                f"{TELEGRAM_API_URL}/bot{TELEGRAM_BOT_TOKEN}/setWebhook",
+                f"{TELEGRAM_API_URL}/bot{bot_token}/setWebhook",
                 json={"url": webhook_url},
             )
             data = resp.json()
