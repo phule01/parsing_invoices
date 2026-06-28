@@ -132,6 +132,9 @@ function SettingsModule() {
       if (!response.ok) throw new Error('Failed to send test message');
 
       const data = await response.json();
+      if (data.status === 'error') {
+        throw new Error(data.message);
+      }
       setSuccess(`✅ ${data.message}`);
       setTimeout(() => setSuccess(''), 5000);
     } catch (err) {
