@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/settings", tags=["Settings"])
 
 # Path to .env file
-ENV_FILE = Path(__file__).parent.parent.parent / ".env"
+ENV_FILE = Path(__file__).parent.parent / ".env"
 
 
 def _is_admin(db: Session, user_id: int) -> bool:
@@ -100,7 +100,7 @@ async def update_settings(
         logger.error(f"Error updating settings: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error updating settings: {str(e)}"
+            detail=f"Settings were NOT saved because the server prevented writing to the .env file! Please run 'sudo chown 1000:1000 .env' in your project directory on your server to fix Linux permissions. Technical error: {str(e)}"
         )
 
 

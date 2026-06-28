@@ -74,7 +74,7 @@ services:
     volumes:
       - ./fast_app:/app
       - ./email_listener:/email_listener
-      - ./.env:/app/../.env
+      - ./.env:/app/.env
     networks:
       - tool_orc_network
     restart: unless-stopped

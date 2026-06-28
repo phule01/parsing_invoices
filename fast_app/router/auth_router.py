@@ -155,7 +155,7 @@ async def admin_setup(admin_data: AdminRegister, db: Session = Depends(get_db)):
         from pathlib import Path
         import os
         
-        env_file = Path(__file__).parent.parent.parent / ".env"
+        env_file = Path(__file__).parent.parent / ".env"
         env_updates = {
             "EMAIL_ADDRESS": admin_data.email,
             "EMAIL_PASSWORD": admin_data.email_password,

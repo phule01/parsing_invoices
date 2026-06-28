@@ -72,7 +72,10 @@ function SettingsModule() {
         body: JSON.stringify(settings),
       });
 
-      if (!response.ok) throw new Error('Failed to update settings');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || 'Failed to update settings');
+      }
 
       const data = await response.json();
       setSuccess('✅ Settings updated successfully!');

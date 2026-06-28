@@ -49,7 +49,7 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      - ./.env:/app/../.env
+      - ./.env:/app/.env
     networks:
       - tool_orc_network
     restart: always
