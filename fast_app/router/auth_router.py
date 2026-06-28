@@ -149,6 +149,31 @@ async def admin_setup(admin_data: AdminRegister, db: Session = Depends(get_db)):
     log_audit(db, user_id=admin_user.id, action="ADMIN_SETUP",
               details="Admin account created with system credentials")
 
+    # Save credentials to .env file and os.environ so the system can actually use them
+    try:
+        from dotenv import set_key
+        from pathlib import Path
+        import os
+        
+        env_file = Path(__file__).parent.parent.parent / ".env"
+        env_updates = {
+            "EMAIL_ADDRESS": admin_data.email,
+            "EMAIL_PASSWORD": admin_data.email_password,
+            "GEMINI_API_KEY": admin_data.gemini_api_key,
+            "TELEGRAM_BOT_TOKEN": admin_data.telegram_bot_token,
+            "TELEGRAM_CHAT_ID": admin_data.telegram_chat_id,
+            "IMAP_SERVER": admin_data.imap_server,
+            "SMTP_SERVER": admin_data.smtp_server,
+        }
+        
+        for key, value in env_updates.items():
+            if value:
+                set_key(env_file, key, str(value))
+                os.environ[key] = str(value)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Failed to update .env during admin setup: {e}")
+
     token = create_access_token(
         user_id=admin_user.id, 
         username=admin_user.username,
