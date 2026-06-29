@@ -17,8 +17,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 logger = logging.getLogger(__name__)
-# Read API key and model from environment (.env or container env)
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+# Read model from environment (.env or container env)
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
 # Optional limit for very large PDFs (0 = no limit)
 MAX_PDF_PAGES = int(os.getenv("MAX_PDF_PAGES", "0"))
@@ -30,40 +29,16 @@ API_MAX_RETRIES = int(os.getenv("GEMINI_API_RETRIES", "3"))  # Number of retries
 BATCH_MAX_CONCURRENT = int(os.getenv("GEMINI_BATCH_CONCURRENT", "3"))  # Max concurrent requests
 
 FALLBACK_MODELS = [
-    "models/gemini-2.5-pro",
-    "models/gemini-2.5-flash",
-    "models/gemini-3.5-flash",
-    "models/gemini-2.0-flash",
-    "models/gemini-2.0-flash-001",
-    "models/gemini-pro-latest",
-    "models/gemini-flash-latest",
-    "models/gemini-2.5-flash-lite",
-    "models/gemini-2.0-flash-lite",
-    "models/gemini-2.0-flash-lite-001",
-    "models/gemini-flash-lite-latest"
+    "models/gemini-3.1-flash-lite"
 ]
 
 _current_model_idx = 0
 
 def get_current_model() -> str:
-    """Get the current Gemini model to use, rotating through fallbacks if necessary."""
-    env_model = os.getenv("GEMINI_MODEL", "")
-    models = []
-    if env_model:
-        # Prepend 'models/' if the user provided a raw model name
-        formatted_env_model = f"models/{env_model}" if not env_model.startswith("models/") else env_model
-        models.append(formatted_env_model)
-    
-    # Add fallback models that aren't already in the list
-    for fm in FALLBACK_MODELS:
-        if fm not in models:
-            models.append(fm)
-            
-    # Default to the first fallback if nothing else is available
-    if not models:
-        models = FALLBACK_MODELS
-        
-    return models[_current_model_idx % len(models)]
+    """Get the current Gemini model to use."""
+    env_model = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
+    formatted_env_model = f"models/{env_model}" if not env_model.startswith("models/") else env_model
+    return formatted_env_model
 
 def advance_model():
     """Advance to the next fallback model when rate limits or quotas are hit."""
@@ -116,7 +91,8 @@ async def parse_invoice_file(file_path: str) -> Optional[Dict[str, Any]]:
     """
     logger.info(f"[AI PARSER] Processing with Gemini model {GEMINI_MODEL}: {file_path}")
     
-    if not GEMINI_API_KEY:
+    api_key = os.getenv("GEMINI_API_KEY", "")
+    if not api_key:
         logger.error("[AI PARSER] GEMINI_API_KEY not set in environment")
         return None
     prompt = """Trích xuất hóa đơn từ tài liệu và trả về dữ liệu dưới dạng JSON cấu trúc.
@@ -303,7 +279,8 @@ async def _call_gemini_api(parts: list) -> Optional[Dict[str, Any]]:
     # but the v1beta endpoint actually accepts both `models/gemini-pro` and `gemini-pro`
     # if we insert it directly into the path.
     url_model = model_name if not model_name.startswith("models/") else model_name[7:]
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{url_model}:generateContent?key={GEMINI_API_KEY}"
+    api_key = os.getenv("GEMINI_API_KEY", "")
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{url_model}:generateContent?key={api_key}"
 
     payload = {
         "contents": [{"parts": parts}],
@@ -327,7 +304,12 @@ async def _call_gemini_api(parts: list) -> Optional[Dict[str, Any]]:
                 logger.warning(f"🚫 {error_msg}: {resp.text[:200]}")
                 raise Exception(error_msg)  # Will trigger immediate retry in parse_invoice_file
             
-            resp.raise_for_status()
+            try:
+                resp.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                # Mask the API key in the URL so it doesn't leak in the logs
+                masked_url = str(e.request.url).replace(api_key, "HIDDEN_API_KEY") if api_key else str(e.request.url)
+                raise Exception(f"Gemini HTTP Error: {resp.status_code} - {masked_url} - {resp.text[:200]}")
             
             data = resp.json()
             

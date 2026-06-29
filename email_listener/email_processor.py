@@ -201,23 +201,39 @@ class APIClient:
         return False
 
 
+def normalize_vietnamese(s: str) -> str:
+    """Remove accents and normalize string for robust matching."""
+    import unicodedata
+    s = unicodedata.normalize('NFKD', s)
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    return s.replace('đ', 'd').replace('Đ', 'D').lower()
+
 def _is_invoice_email(subject: str, body: str, has_attachments: bool = False) -> bool:
     """
-    Check if email is likely an invoice.
-    
-    Returns True ONLY if email has PDF/XML/ZIP attachments.
-    The has_attachments parameter is already checked by _has_invoice_attachments().
+    Check if email is likely an invoice based on subject keywords.
+    Returns True ONLY if email has PDF/XML attachments AND subject matches.
     """
-    # Only process emails that definitely have invoice file types
-    return has_attachments
+    if not has_attachments:
+        return False
+        
+    DEFAULT_KEYWORDS = "hóa đơn,hoa don,hoadon,hoa_don,hóa đơn điện tử,hoa don dien tu,hoadondientu,hđđt,hddt,invoice,einvoice,e-invoice,receipt,ebill,e-bill,biên lai,bien lai,bienlai,thanh toán,thanh toan,thanhtoan,cước,cuoc,vat,gtgt,chứng từ,chung tu"
+    keywords_str = os.getenv("INVOICE_SUBJECT_KEYWORDS", DEFAULT_KEYWORDS)
+    if keywords_str:
+        keywords = [normalize_vietnamese(k.strip()) for k in keywords_str.split(",") if k.strip()]
+        if keywords:
+            subject_normalized = normalize_vietnamese(subject)
+            if not any(k in subject_normalized for k in keywords):
+                return False
+                
+    return True
 
 
 def decode_subject(subject_header):
     """Decode email subject."""
+    if not subject_header:
+        return ""
     try:
-        if isinstance(subject_header, str):
-            return subject_header
-        decoded = decode_header(subject_header)
+        decoded = decode_header(str(subject_header))
         result = ""
         for part, encoding in decoded:
             if isinstance(part, bytes):
@@ -241,7 +257,7 @@ def _has_invoice_attachments(msg) -> bool:
             if filename:
                 attachment_count += 1
                 ext = filename.lower().split('.')[-1]
-                if ext in ('pdf', 'xml', 'zip'):
+                if ext in ('pdf', 'xml', 'zip', 'png', 'jpg', 'jpeg', 'tiff', 'bmp', 'gif'):
                     invoice_attachment_count += 1
                     logger.debug(f"Found invoice attachment: {filename}")
         
@@ -363,40 +379,63 @@ async def fetch_unread_emails(mail, processed_ids: set) -> list:
     skipped_already_processed = 0
     skipped_no_attachments = 0
     try:
-        status, email_ids = mail.search(None, "UNSEEN")
+        try:
+            # Try Gmail-specific search first to exclude spam tabs
+            status, email_ids = mail.search(None, 'X-GM-RAW', '"-category:promotions -category:social"')
+            if status != "OK":
+                # Fallback to standard ALL if X-GM-RAW fails
+                status, email_ids = mail.search(None, "ALL")
+        except Exception:
+            status, email_ids = mail.search(None, "ALL")
+            
         if status != "OK":
-            logger.warning("IMAP UNSEEN search returned non-OK status")
+            logger.warning("IMAP search returned non-OK status")
             return emails
 
-        email_list = email_ids[0].split()[-50:]  # Get last 50 emails (most recent)
+        email_list = email_ids[0].split()[-10:]  # Get last 10 emails (most recent)
         logger.info(f"📬 {len(email_list)} emails found (checking against processed list)")
 
         for eid in email_list:
             try:
-                status, data = mail.fetch(eid, "(RFC822)")
+                # 1. Fetch only headers first to save bandwidth
+                status, header_data = mail.fetch(eid, "(BODY.PEEK[HEADER])")
                 if status != "OK":
-                    logger.debug(f"Failed to fetch email {eid.decode()}")
+                    logger.debug(f"Failed to fetch headers for email {eid.decode()}")
                     continue
 
-                msg = message_from_bytes(data[0][1])
-                message_id = msg.get("Message-ID", f"<no-id-{eid.decode()}>")
+                header_msg = message_from_bytes(header_data[0][1])
+                message_id = header_msg.get("Message-ID", f"<no-id-{eid.decode()}>")
 
                 if message_id in processed_ids:
                     logger.debug(f"Skipping already-processed: {message_id}")
                     skipped_already_processed += 1
                     continue
 
-                sender = msg.get("From", "")
-                subject = decode_subject(msg.get("Subject", ""))
+                sender = header_msg.get("From", "")
+                subject = decode_subject(header_msg.get("Subject", ""))
+
+                # 2. Fast rejection: Check subject BEFORE downloading huge attachments
+                if not _is_invoice_email(subject, "", has_attachments=True):
+                    skipped_no_attachments += 1
+                    logger.info(f"⏭️  Skip (subject mismatch): {subject[:60]}")
+                    continue
+
+                # 3. Only if subject matches, download the FULL email to get attachments
+                status, full_data = mail.fetch(eid, "(RFC822)")
+                if status != "OK":
+                    logger.warning(f"Failed to fetch full body for email {eid.decode()}")
+                    continue
+                    
+                msg = message_from_bytes(full_data[0][1])
                 body = get_email_body(msg)
                 has_attachments = _has_invoice_attachments(msg)
 
-                if _is_invoice_email(subject, body, has_attachments):
+                if has_attachments:
                     emails.append((eid, message_id, sender, subject, msg))
                     logger.info(f"✅ Found invoice email: {subject[:60]} from {sender[:40]}")
                 else:
                     skipped_no_attachments += 1
-                    logger.info(f"⏭️  Skip (no invoice attachments): {subject[:60]} | Attachments: {has_attachments}")
+                    logger.info(f"⏭️  Skip (subject matched but no attachments): {subject[:60]}")
 
             except Exception as e:
                 logger.error(f"Error fetching email id={eid}: {e}")
@@ -408,13 +447,51 @@ async def fetch_unread_emails(mail, processed_ids: set) -> list:
     return emails
 
 
+def _check_and_store_file_hash(file_path: str) -> bool:
+    """
+    Check if the SHA-256 hash of the file exists in the persistent JSON storage.
+    If it does, return True (is duplicate).
+    If it doesn't, add it and return False (is new).
+    """
+    import hashlib
+    import json
+    
+    hash_file = "/app/invoices/processed_hashes.json"
+    
+    try:
+        sha256_hash = hashlib.sha256()
+        with open(file_path, "rb") as f:
+            for byte_block in iter(lambda: f.read(4096), b""):
+                sha256_hash.update(byte_block)
+        file_hash = sha256_hash.hexdigest()
+        
+        hashes = []
+        if os.path.exists(hash_file):
+            try:
+                with open(hash_file, "r") as f:
+                    hashes = json.load(f)
+            except Exception:
+                hashes = []
+                
+        if file_hash in hashes:
+            return True
+            
+        hashes.append(file_hash)
+        with open(hash_file, "w") as f:
+            json.dump(hashes, f)
+            
+        return False
+    except Exception as e:
+        logger.error(f"Error in file hashing: {e}")
+        return False
+
 async def process_single_email(eid, message_id: str, sender: str, subject: str, msg, mail, api: APIClient):
     """
     Full processing pipeline for one email:
       1. Log the email to the backend
       2. Extract PDF/XML attachments
-            3. Queue each file for parsing in the async pipeline
-            4. Mark the email as read so the listener can continue immediately
+      3. Queue each file for parsing in the async pipeline
+      4. Mark the email as read so the listener can continue immediately
     """
     # 1. Log email
     log_data = {
@@ -435,6 +512,10 @@ async def process_single_email(eid, message_id: str, sender: str, subject: str, 
 
     # 3. Queue files for asynchronous parsing so one bad file does not block the mail loop
     for file_path in files:
+        if _check_and_store_file_hash(file_path):
+            logger.info(f"⏭️  Duplicate file skipped (hash already processed): {os.path.basename(file_path)}")
+            continue
+            
         try:
             await pipeline.enqueue_file(
                 file_path,
@@ -484,21 +565,34 @@ async def main_loop(api: APIClient):
             # 4. Kết nối tới Gmail IMAP
             mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
             mail.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
-            mail.select("INBOX")
             
-            # 2. Lấy danh sách ID đã xử lý
-            processed_ids = await api.get_processed_message_ids()
+            folders_to_scan = ["INBOX", '"[Gmail]/Spam"', "Spam"]
             
-            # 3. Quét email và đẩy vào pipeline
-            emails = await fetch_unread_emails(mail, processed_ids)
-            logger.info(f"🔄 Processing {len(emails)} emails...")
-            for eid, message_id, sender, subject, msg in emails:
+            for folder in folders_to_scan:
                 try:
-                    logger.info(f"🔸 Starting to process email: {subject[:50]}")
-                    await process_single_email(eid, message_id, sender, subject, msg, mail, api)
-                    logger.info(f"✅ Completed processing: {subject[:50]}")
+                    status, _ = mail.select(folder)
+                    if status != "OK":
+                        continue
+                        
+                    logger.info(f"📂 Quét thư mục: {folder}")
+                    
+                    # 2. Lấy danh sách ID đã xử lý
+                    processed_ids = await api.get_processed_message_ids()
+                    
+                    # 3. Quét email và đẩy vào pipeline
+                    emails = await fetch_unread_emails(mail, processed_ids)
+                    if emails:
+                        logger.info(f"🔄 Processing {len(emails)} emails from {folder}...")
+                    
+                    for eid, message_id, sender, subject, msg in emails:
+                        try:
+                            logger.info(f"🔸 Starting to process email: {subject[:50]}")
+                            await process_single_email(eid, message_id, sender, subject, msg, mail, api)
+                            logger.info(f"✅ Completed processing: {subject[:50]}")
+                        except Exception as e:
+                            logger.error(f"❌ Error in process_single_email: {e}", exc_info=True)
                 except Exception as e:
-                    logger.error(f"❌ Error in process_single_email: {e}", exc_info=True)
+                    logger.warning(f"⚠️ Lỗi khi quét thư mục {folder}: {e}")
                 
         except Exception as e:
             logger.error(f"❌ Lỗi trong vòng lặp quét mail: {e}")

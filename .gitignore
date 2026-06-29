@@ -30,3 +30,5 @@ email_listener/invoices/*.xml
 
 # Docker
 *.log
+__pycache__/
+*.pyc

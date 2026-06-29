@@ -11,7 +11,7 @@ from email.message import Message
 logger = logging.getLogger(__name__)
 
 DOWNLOAD_DIR = os.getenv("DOWNLOAD_DIR", "/tmp/invoices")
-ALLOWED_EXTENSIONS = {".pdf", ".xml", ".zip"}
+ALLOWED_EXTENSIONS = {".pdf", ".xml", ".zip", ".png", ".jpg", ".jpeg", ".tiff", ".bmp", ".gif"}
 
 
 def save_attachment(part: Message, save_dir: str) -> list[str]:
@@ -62,7 +62,7 @@ def _extract_zip(zip_path: str, extract_dir: str) -> list[str]:
         with zipfile.ZipFile(zip_path, "r") as zf:
             for info in zf.infolist():
                 ext = Path(info.filename).suffix.lower()
-                if ext in {".pdf", ".xml"}:
+                if ext in {".pdf", ".xml", ".png", ".jpg", ".jpeg", ".tiff", ".bmp", ".gif"}:
                     # Extract with collision detection
                     extract_path = os.path.join(extract_dir, info.filename)
                     os.makedirs(os.path.dirname(extract_path), exist_ok=True)
@@ -126,7 +126,7 @@ def extract_attachments_from_email(msg: Message, message_id: str) -> list[str]:
         logger.debug(f"📄 Part {part_index}: filename={filename} | type={content_type} | disposition={content_disposition[:30]} | size={payload_size} bytes")
 
         # Count likely attachment parts for diagnostics
-        if filename or ("attachment" in content_disposition) or content_type in ("application/pdf", "text/xml", "application/xml", "application/zip"):
+        if filename or ("attachment" in content_disposition) or content_type in ("application/pdf", "text/xml", "application/xml", "application/zip") or content_type.startswith("image/"):
             candidate_count += 1
 
         # Prefer saving parts with filenames first
@@ -163,6 +163,20 @@ def extract_attachments_from_email(msg: Message, message_id: str) -> list[str]:
                 all_files.append(file_path)
             except Exception as e:
                 logger.error(f"Failed to save generated xml attachment: {e}")
+                
+        elif payload and content_type.startswith("image/"):
+            generated_index += 1
+            ext = content_type.split("/")[-1]
+            if ext == "jpeg": ext = "jpg"
+            gen_name = f"attachment_{generated_index}.{ext}"
+            file_path = os.path.join(save_dir, gen_name)
+            try:
+                with open(file_path, "wb") as f:
+                    f.write(payload)
+                logger.info(f"Đã lưu attachment (generated image): {file_path}")
+                all_files.append(file_path)
+            except Exception as e:
+                logger.error(f"Failed to save generated image attachment: {e}")
 
     logger.info(f"📊 Attachment extraction complete: candidates={candidate_count}, saved={len(all_files)} files for message {message_id}")
     return all_files
