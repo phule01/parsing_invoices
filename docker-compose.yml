@@ -125,6 +125,7 @@ services:
     volumes:
       - ./email_listener:/app
       - invoice_files:/app/invoices
+      - ./.env:/app/.env
     networks:
       - tool_orc_network
     restart: unless-stopped

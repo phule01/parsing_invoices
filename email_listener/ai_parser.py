@@ -29,6 +29,48 @@ API_TIMEOUT = int(os.getenv("GEMINI_API_TIMEOUT", "120"))  # Request timeout in 
 API_MAX_RETRIES = int(os.getenv("GEMINI_API_RETRIES", "3"))  # Number of retries for failed requests
 BATCH_MAX_CONCURRENT = int(os.getenv("GEMINI_BATCH_CONCURRENT", "3"))  # Max concurrent requests
 
+FALLBACK_MODELS = [
+    "models/gemini-2.5-pro",
+    "models/gemini-2.5-flash",
+    "models/gemini-3.5-flash",
+    "models/gemini-2.0-flash",
+    "models/gemini-2.0-flash-001",
+    "models/gemini-pro-latest",
+    "models/gemini-flash-latest",
+    "models/gemini-2.5-flash-lite",
+    "models/gemini-2.0-flash-lite",
+    "models/gemini-2.0-flash-lite-001",
+    "models/gemini-flash-lite-latest"
+]
+
+_current_model_idx = 0
+
+def get_current_model() -> str:
+    """Get the current Gemini model to use, rotating through fallbacks if necessary."""
+    env_model = os.getenv("GEMINI_MODEL", "")
+    models = []
+    if env_model:
+        # Prepend 'models/' if the user provided a raw model name
+        formatted_env_model = f"models/{env_model}" if not env_model.startswith("models/") else env_model
+        models.append(formatted_env_model)
+    
+    # Add fallback models that aren't already in the list
+    for fm in FALLBACK_MODELS:
+        if fm not in models:
+            models.append(fm)
+            
+    # Default to the first fallback if nothing else is available
+    if not models:
+        models = FALLBACK_MODELS
+        
+    return models[_current_model_idx % len(models)]
+
+def advance_model():
+    """Advance to the next fallback model when rate limits or quotas are hit."""
+    global _current_model_idx
+    _current_model_idx += 1
+    logger.info(f"🔄 Switched to fallback Gemini model: {get_current_model()}")
+
 # Semaphore for controlling concurrent API calls
 _api_semaphore = asyncio.Semaphore(BATCH_MAX_CONCURRENT)
 _last_api_call = 0
@@ -155,8 +197,9 @@ Quan trọng:
     # Prepend the instruction prompt
     parts.insert(0, {"text": prompt})
     
-    # Try to parse with retries
-    for attempt in range(API_MAX_RETRIES):
+    # Try to parse with retries (increase max retries to account for fallback models)
+    max_attempts = max(API_MAX_RETRIES, len(FALLBACK_MODELS) + 2)
+    for attempt in range(max_attempts):
         try:
             async with _api_semaphore:
                 await _rate_limit_delay()
@@ -172,15 +215,19 @@ Quan trọng:
                 
         except asyncio.TimeoutError:
             logger.warning(f"[AI PARSER] Attempt {attempt + 1}: API timeout")
-            if attempt < API_MAX_RETRIES - 1:
+            if attempt < max_attempts - 1:
                 await asyncio.sleep(5 * (attempt + 1))  # Exponential backoff
                 
         except Exception as e:
             logger.warning(f"[AI PARSER] Attempt {attempt + 1}: {e}")
-            if attempt < API_MAX_RETRIES - 1:
+            if "RATE_LIMIT_EXCEEDED" in str(e):
+                logger.info(f"⏭️  Switching model and retrying immediately...")
+                continue # Try immediately with new model
+                
+            if attempt < max_attempts - 1:
                 await asyncio.sleep(3 * (attempt + 1))  # Exponential backoff
     
-    logger.error(f"[AI PARSER] Failed to parse after {API_MAX_RETRIES} attempts")
+    logger.error(f"[AI PARSER] Failed to parse after {max_attempts} attempts")
     return None
 
 
@@ -251,7 +298,12 @@ async def _call_gemini_api(parts: list) -> Optional[Dict[str, Any]]:
         httpx.HTTPStatusError: On API HTTP errors (including rate limits)
         Exception: On network and other errors
     """
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
+    model_name = get_current_model()
+    # Strip 'models/' prefix if the endpoint URL format requires it, 
+    # but the v1beta endpoint actually accepts both `models/gemini-pro` and `gemini-pro`
+    # if we insert it directly into the path.
+    url_model = model_name if not model_name.startswith("models/") else model_name[7:]
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{url_model}:generateContent?key={GEMINI_API_KEY}"
 
     payload = {
         "contents": [{"parts": parts}],
@@ -270,9 +322,10 @@ async def _call_gemini_api(parts: list) -> Optional[Dict[str, Any]]:
             
             # Check for rate limit errors (HTTP 429) and re-raise for retry
             if resp.status_code == 429:
-                error_msg = f"Rate limit exceeded [HTTP 429]"
+                advance_model()
+                error_msg = f"Rate limit exceeded [HTTP 429]. RATE_LIMIT_EXCEEDED"
                 logger.warning(f"🚫 {error_msg}: {resp.text[:200]}")
-                raise Exception(error_msg)  # Will trigger retry in parse_invoice_file
+                raise Exception(error_msg)  # Will trigger immediate retry in parse_invoice_file
             
             resp.raise_for_status()
             
