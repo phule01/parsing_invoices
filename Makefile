@@ -46,8 +46,7 @@ help:
 	@echo "    make clean           Remove containers + volumes (⚠ deletes DB!)"
 	@echo "    make clean-images    Remove built images (keeps data)"
 	@echo ""
-	@echo "  Cloudflare Tunnel:"
-	@echo "    make logs-tunnel     Stream Cloudflare Tunnel logs"
+
 	@echo ""
 	@echo "  Service URLs:"
 	@echo "    Web UI:    http://localhost:7300"
@@ -118,9 +117,6 @@ logs-email:
 
 logs-db:
 	docker compose logs -f postgres
-
-logs-tunnel:
-	docker compose logs -f cloudflared
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Cleanup

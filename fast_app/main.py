@@ -144,7 +144,7 @@ _cors_origins = [
     "http://localhost:8000",
     "http://localhost:8080",
 ]
-# Add dynamic origins from environment (e.g., Cloudflare Tunnel domain)
+# Add dynamic origins from environment (e.g., Custom Production Domain)
 for _env_key in ("FRONTEND_URL", "CORS_ALLOWED_ORIGIN", "REACT_APP_API_URL"):
     _val = os.getenv(_env_key, "")
     if _val and _val not in _cors_origins:

@@ -114,22 +114,6 @@ echo "⚠️  WARNING: Never run 'docker compose down -v' — deletes database!"
 echo "═══════════════════════════════════════════════════════════"
 echo ""
 
-# ── Cloudflare Tunnel status ──────────────────────────────────────────────────
-CF_STATUS=$(docker inspect --format='{{.State.Status}}' tool_orc_cloudflared 2>/dev/null || echo "not_found")
-if [[ "$CF_STATUS" == "running" ]]; then
-  echo "🌐 Cloudflare Tunnel: running"
-  WEBHOOK_URL=$(grep -oP 'TELEGRAM_WEBHOOK_URL=\K.*' .env 2>/dev/null || echo "")
-  if [[ -n "$WEBHOOK_URL" ]]; then
-    echo "   Telegram webhook: $WEBHOOK_URL"
-  else
-    echo "   ⚠️  Set TELEGRAM_WEBHOOK_URL in .env for Telegram webhooks"
-  fi
-elif [[ "$CF_STATUS" == "not_found" ]]; then
-  echo "ℹ️  Cloudflare Tunnel: not configured (set CLOUDFLARE_TUNNEL_TOKEN in .env)"
-else
-  echo "⚠️  Cloudflare Tunnel: $CF_STATUS — check logs: docker compose logs cloudflared"
-fi
-
 # ── Open browser ──────────────────────────────────────────────────────────────
 sleep 1
 if [[ "${OSTYPE:-}" == darwin* ]]; then

@@ -130,23 +130,6 @@ services:
         max-size: "10m"
         max-file: "5"
 
-  # ── Cloudflare Tunnel ────────────────────────────────────────────────────
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    container_name: tool_orc_cloudflared
-    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
-    networks:
-      - tool_orc_network
-    restart: always
-    depends_on:
-      fastapi:
-        condition: service_healthy
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "5m"
-        max-file: "3"
-
   nginx:
     image: nginx:alpine
     container_name: tool_orc_nginx_prod
