@@ -88,7 +88,20 @@ class APIClient:
         except Exception as e:
             logger.error(f"Auth error: {e}")
             return False
-
+    async def get_system_settings(self) -> dict:
+        """Fetch system settings (email, token, etc) from the database."""
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(
+                    f"{self.base_url}/api/settings/system",
+                    headers=self._headers(),
+                )
+                if resp.status_code == 200:
+                    return resp.json()
+                logger.warning(f"Failed to fetch system settings: [{resp.status_code}]")
+        except Exception as e:
+            logger.error(f"Error fetching system settings: {e}")
+        return {}
     async def get_processed_message_ids(self) -> set:
         """Get list of already-processed email message IDs."""
         try:
@@ -539,26 +552,33 @@ async def main_loop(api: APIClient):
     logger.info(f"🚀 Bắt đầu vòng lặp quét email (Chu kỳ: {SCAN_INTERVAL}s)")
     
     while True:
-        # 1. Live reload .env file to pick up UI changes instantly
-        from dotenv import load_dotenv
-        load_dotenv("/app/.env", override=True)
+        # 1. Fetch system settings from DB instead of .env
+        settings = await api.get_system_settings()
+        if not settings:
+            # If API fails or backend is restarting, sleep and retry
+            logger.warning("Failed to fetch system settings from API. Retrying in 10s...")
+            await asyncio.sleep(10)
+            continue
         
         # 2. Check for missing critical configuration
-        gemini_key = os.getenv("GEMINI_API_KEY")
-        bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
-        email_pass = os.getenv("EMAIL_PASSWORD")
+        gemini_key = settings.get("GEMINI_API_KEY", "")
+        bot_token = settings.get("TELEGRAM_BOT_TOKEN", "")
+        email_pass = settings.get("EMAIL_PASSWORD", "")
         
         if not gemini_key or not bot_token or not email_pass:
-            logger.warning("⏳ System not fully configured yet! Missing Gemini API Key, Telegram Token, or Email Password. Pausing scan for 60s to avoid missing emails...")
+            logger.warning("⏳ System not fully configured yet! Missing Gemini API Key, Telegram Token, or Email Password in Database. Pausing scan for 60s...")
             await asyncio.sleep(60)
             continue
             
         # 3. Update global connection variables dynamically
         global IMAP_SERVER, IMAP_PORT, EMAIL_ADDRESS, EMAIL_PASSWORD
-        IMAP_SERVER = os.getenv("IMAP_SERVER", "imap.gmail.com")
-        IMAP_PORT = int(os.getenv("IMAP_PORT", 993))
-        EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS", "")
-        EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD", "")
+        IMAP_SERVER = settings.get("IMAP_SERVER", "imap.gmail.com")
+        IMAP_PORT = int(settings.get("IMAP_PORT", 993))
+        EMAIL_ADDRESS = settings.get("EMAIL_ADDRESS", "")
+        EMAIL_PASSWORD = email_pass
+        
+        # Store Gemini API Key in environment for ai_parser to pick up dynamically
+        os.environ["GEMINI_API_KEY"] = gemini_key
 
         mail = None
         try:

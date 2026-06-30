@@ -150,7 +150,8 @@ async def handle_invoice_callback(
         )
 
     # ── Edit the original Telegram message to remove buttons ──────────────────
-    bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+    admin = db.query(User).filter(User.is_admin == True).first()
+    bot_token = admin.telegram_bot_token if admin else os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
     if not bot_token:
         return {"status": "error", "msg": "TELEGRAM_BOT_TOKEN not configured"}
 

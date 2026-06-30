@@ -7,6 +7,7 @@ import {
   triggerEmailScan,
 } from '../../api/invoiceApi';
 import { useAuth } from '../../context/AuthContext';
+import InvoiceDetailsModal from './InvoiceDetailsModal';
 import './InvoiceModule.css';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -52,6 +53,7 @@ function InvoiceModule() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [formData, setFormData] = useState(EMPTY_FORM);
   const [deleteModal, setDeleteModal] = useState(EMPTY_DELETE_MODAL);
+  const [selectedInvoice, setSelectedInvoice] = useState(null);
 
   // ── Data fetching ───────────────────────────────────────────────────────────
 
@@ -274,6 +276,7 @@ function InvoiceModule() {
                   <td>
                     <InvoiceRowActions
                       invoice={invoice}
+                      onView={() => setSelectedInvoice(invoice)}
                       onApprove={handleApprove}
                       onReject={handleReject}
                       onDelete={handleOpenDeleteModal}
@@ -320,16 +323,24 @@ function InvoiceModule() {
           </div>
         </div>
       )}
+
+      <InvoiceDetailsModal 
+        invoice={selectedInvoice} 
+        onClose={() => setSelectedInvoice(null)} 
+      />
     </div>
   );
 }
 
 // ── Row actions sub-component ─────────────────────────────────────────────────
 
-function InvoiceRowActions({ invoice, onApprove, onReject, onDelete, isApproving, isRejecting, isDeleting }) {
+function InvoiceRowActions({ invoice, onView, onApprove, onReject, onDelete, isApproving, isRejecting, isDeleting }) {
   const busy = isApproving || isRejecting || isDeleting;
   return (
     <div className="action-buttons">
+      <button onClick={onView} className="btn-secondary" style={{ marginRight: '5px' }}>
+        🔍 View
+      </button>
       {invoice.status === 'pending' && (
         <>
           <button onClick={() => onApprove(invoice.id)} className="btn-approve" disabled={busy}>

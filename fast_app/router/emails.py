@@ -54,10 +54,7 @@ SCAN_STATE = {
     "last_result": None,
 }
 
-SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
-SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
-EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS", "")
-EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD", "")
+
 
 
 class EmailLogCreate(BaseModel):
@@ -175,9 +172,13 @@ def send_email(recipient: str, subject: str, body: str, db: Session = Depends(ge
     """Send an email"""
     email_log = None
     try:
+        # Get email address from admin user
+        admin = db.query(User).filter(User.is_admin == True).first()
+        sender_email = admin.email if admin and admin.email else os.getenv("EMAIL_ADDRESS", "")
+        
         # Create email log entry
         email_log = EmailLog(
-            email_from=EMAIL_ADDRESS,
+            email_from=sender_email,
             email_subject=subject,
             status="sending"
         )
@@ -186,15 +187,15 @@ def send_email(recipient: str, subject: str, body: str, db: Session = Depends(ge
 
         # Send email
         msg = MIMEMultipart()
-        msg["From"] = EMAIL_ADDRESS
+        msg["From"] = sender_email
         msg["To"] = recipient
         msg["Subject"] = subject
         msg.attach(MIMEText(body, "html"))
 
         # Note: In production, use proper SMTP configuration
-        # server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        # server = smtplib.SMTP(admin.smtp_server or "smtp.gmail.com", 587)
         # server.starttls()
-        # server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+        # server.login(sender_email, admin.email_password)
         # server.send_message(msg)
         # server.quit()
 

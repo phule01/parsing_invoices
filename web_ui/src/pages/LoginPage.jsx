@@ -11,8 +11,8 @@ function LoginPage() {
   const [localError, setLocalError] = useState('');
 
   // User Login Form
-  const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('admin');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
 
   // Admin Setup Form
   const [adminForm, setAdminForm] = useState({
@@ -28,7 +28,7 @@ function LoginPage() {
     smtp_server: 'smtp.gmail.com',
   });
 
-  // Check if admin exists
+  // Checkgit if admin exists
   useEffect(() => {
     const checkAdmin = async () => {
       try {
@@ -176,7 +176,7 @@ function LoginPage() {
               {/* Basic Info Section */}
               <fieldset className="form-section">
                 <legend>Basic Account Information</legend>
-                
+
                 <div className="form-row">
                   <div className="form-group">
                     <label htmlFor="admin_username">Username</label>
@@ -357,14 +357,6 @@ function LoginPage() {
                 {loading ? 'Setting up...' : 'Complete Admin Setup'}
               </button>
             </form>
-          )}
-
-          {activeTab === 'user' && (
-            <div className="demo-info">
-              <h3>Demo Credentials:</h3>
-              <p><strong>Username:</strong> admin</p>
-              <p><strong>Password:</strong> admin</p>
-            </div>
           )}
         </div>
       </div>

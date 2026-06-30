@@ -42,28 +42,53 @@ async def get_settings(request: Request, db: Session = Depends(get_db)):
     token = get_token_from_request(request)
     data = decode_token(token)
     
+    # We fetch the first admin user to store global settings
+    admin_user = db.query(User).filter(User.is_admin == True).first()
     is_admin = _is_admin(db, data["user_id"])
     
     if is_admin:
         return {
-            "EMAIL_ADDRESS": os.getenv("EMAIL_ADDRESS", ""),
-            "GEMINI_API_KEY": os.getenv("GEMINI_API_KEY", ""),
-            "TELEGRAM_BOT_TOKEN": os.getenv("TELEGRAM_BOT_TOKEN", ""),
-            "TELEGRAM_CHAT_ID": os.getenv("TELEGRAM_CHAT_ID", ""),
-            "IMAP_SERVER": os.getenv("IMAP_SERVER", ""),
-            "SMTP_SERVER": os.getenv("SMTP_SERVER", ""),
+            "EMAIL_ADDRESS": admin_user.email if admin_user and admin_user.email else os.getenv("EMAIL_ADDRESS", ""),
+            "GEMINI_API_KEY": admin_user.gemini_api_key if admin_user and admin_user.gemini_api_key else os.getenv("GEMINI_API_KEY", ""),
+            "TELEGRAM_BOT_TOKEN": admin_user.telegram_bot_token if admin_user and admin_user.telegram_bot_token else os.getenv("TELEGRAM_BOT_TOKEN", ""),
+            "TELEGRAM_CHAT_ID": admin_user.telegram_chat_id if admin_user and admin_user.telegram_chat_id else os.getenv("TELEGRAM_CHAT_ID", ""),
+            "IMAP_SERVER": admin_user.imap_server if admin_user and admin_user.imap_server else os.getenv("IMAP_SERVER", "imap.gmail.com"),
+            "SMTP_SERVER": admin_user.smtp_server if admin_user and admin_user.smtp_server else os.getenv("SMTP_SERVER", "smtp.gmail.com"),
         }
     else:
         # Standard users only see the email address to verify it's working
         return {
-            "EMAIL_ADDRESS": os.getenv("EMAIL_ADDRESS", ""),
-            "IMAP_SERVER": os.getenv("IMAP_SERVER", ""),
-            "SMTP_SERVER": os.getenv("SMTP_SERVER", ""),
+            "EMAIL_ADDRESS": admin_user.email if admin_user and admin_user.email else os.getenv("EMAIL_ADDRESS", ""),
+            "IMAP_SERVER": admin_user.imap_server if admin_user and admin_user.imap_server else os.getenv("IMAP_SERVER", "imap.gmail.com"),
+            "SMTP_SERVER": admin_user.smtp_server if admin_user and admin_user.smtp_server else os.getenv("SMTP_SERVER", "smtp.gmail.com"),
             "GEMINI_API_KEY": "",
             "TELEGRAM_BOT_TOKEN": "",
             "TELEGRAM_CHAT_ID": "",
         }
 
+@router.get("/system")
+async def get_system_settings(request: Request, db: Session = Depends(get_db)):
+    """Internal endpoint for email_listener to get full credentials including passwords."""
+    from app.core.security import get_token_from_request, decode_token
+    token = get_token_from_request(request)
+    data = decode_token(token)
+    
+    if not _is_admin(db, data["user_id"]):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        
+    admin_user = db.query(User).filter(User.is_admin == True).first()
+    
+    return {
+        "EMAIL_ADDRESS": admin_user.email if admin_user and admin_user.email else os.getenv("EMAIL_ADDRESS", ""),
+        "EMAIL_PASSWORD": admin_user.email_password if admin_user and admin_user.email_password else os.getenv("EMAIL_PASSWORD", ""),
+        "GEMINI_API_KEY": admin_user.gemini_api_key if admin_user and admin_user.gemini_api_key else os.getenv("GEMINI_API_KEY", ""),
+        "TELEGRAM_BOT_TOKEN": admin_user.telegram_bot_token if admin_user and admin_user.telegram_bot_token else os.getenv("TELEGRAM_BOT_TOKEN", ""),
+        "TELEGRAM_CHAT_ID": admin_user.telegram_chat_id if admin_user and admin_user.telegram_chat_id else os.getenv("TELEGRAM_CHAT_ID", ""),
+        "IMAP_SERVER": admin_user.imap_server if admin_user and admin_user.imap_server else os.getenv("IMAP_SERVER", "imap.gmail.com"),
+        "IMAP_PORT": os.getenv("IMAP_PORT", "993"),
+        "SMTP_SERVER": admin_user.smtp_server if admin_user and admin_user.smtp_server else os.getenv("SMTP_SERVER", "smtp.gmail.com"),
+        "SMTP_PORT": os.getenv("SMTP_PORT", "587"),
+    }
 
 @router.post("/update")
 async def update_settings(
@@ -71,7 +96,7 @@ async def update_settings(
     request: Request,
     db: Session = Depends(get_db)
 ):
-    """Update settings (admins only)"""
+    """Update settings (admins only) in the database"""
     from app.core.security import get_token_from_request, decode_token
     
     token = get_token_from_request(request)
@@ -84,21 +109,37 @@ async def update_settings(
         )
     
     try:
-        # Update .env file with new values using in-place writer to preserve Docker inode
-        from app.core.env_utils import update_env_file_in_place
-        update_env_file_in_place(str(ENV_FILE), data)
-        logger.info(f"✅ Updated settings: {list(data.keys())}")
+        admin_user = db.query(User).filter(User.is_admin == True).first()
+        if not admin_user:
+            raise Exception("No admin user found to save settings to")
+            
+        # Update admin user fields
+        if "EMAIL_ADDRESS" in data:
+            admin_user.email = data["EMAIL_ADDRESS"]
+        if "EMAIL_PASSWORD" in data and data["EMAIL_PASSWORD"]:
+            # Only update password if provided (don't overwrite with empty)
+            admin_user.email_password = data["EMAIL_PASSWORD"]
+        if "GEMINI_API_KEY" in data:
+            admin_user.gemini_api_key = data["GEMINI_API_KEY"]
+        if "TELEGRAM_BOT_TOKEN" in data:
+            admin_user.telegram_bot_token = data["TELEGRAM_BOT_TOKEN"]
+        if "TELEGRAM_CHAT_ID" in data:
+            admin_user.telegram_chat_id = data["TELEGRAM_CHAT_ID"]
+            
+        db.commit()
+        logger.info(f"✅ Updated settings in database: {list(data.keys())}")
         
         return {
             "status": "success",
-            "message": "Settings updated successfully",
+            "message": "Settings updated successfully in database",
             "updated_keys": list(data.keys())
         }
     except Exception as e:
-        logger.error(f"Error updating settings: {e}")
+        db.rollback()
+        logger.error(f"Error updating settings in database: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Settings were NOT saved because the server prevented writing to the .env file! Please run 'sudo chown 1000:1000 .env' in your project directory on your server to fix Linux permissions. Technical error: {str(e)}"
+            detail=f"Database error: {str(e)}"
         )
 
 

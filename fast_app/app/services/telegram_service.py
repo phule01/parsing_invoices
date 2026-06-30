@@ -35,6 +35,23 @@ logger = logging.getLogger(__name__)
 
 TELEGRAM_API_URL: str = "https://api.telegram.org"
 
+def get_telegram_config() -> tuple[str, str]:
+    """Fetch telegram bot token and chat ID from database."""
+    from database import SessionLocal
+    from models import User
+    
+    try:
+        with SessionLocal() as db:
+            admin = db.query(User).filter(User.is_admin == True).first()
+            if admin:
+                bot_token = admin.telegram_bot_token or os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+                chat_id = admin.telegram_chat_id or os.getenv("TELEGRAM_CHAT_ID", "").strip()
+                return bot_token, chat_id
+    except Exception as e:
+        logger.error(f"Error fetching telegram config from db: {e}")
+        
+    return os.getenv("TELEGRAM_BOT_TOKEN", "").strip(), os.getenv("TELEGRAM_CHAT_ID", "").strip()
+
 # Lazy-import to avoid circular dependency at module load time
 def _get_connection_manager():
     try:
@@ -65,8 +82,9 @@ async def send_message_with_metadata(
     Send a message and return {"ok": bool, "message_id": int|None, "chat_id": str|None}.
     Use this when you need the Telegram message_id to edit it later.
     """
-    bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
-    chat_id_target = chat_id or os.getenv("TELEGRAM_CHAT_ID", "").strip()
+    db_bot_token, db_chat_id = get_telegram_config()
+    bot_token = db_bot_token
+    chat_id_target = chat_id or db_chat_id
     if not bot_token or not chat_id_target:
         return {"ok": False, "message_id": None, "chat_id": None}
 
@@ -101,7 +119,7 @@ async def edit_message(
     reply_markup: Optional[dict] = None,
 ) -> bool:
     """Edit an existing Telegram message (e.g. to remove inline buttons after action)."""
-    bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+    bot_token, _ = get_telegram_config()
     if not bot_token:
         return False
     payload: dict = {
@@ -267,8 +285,7 @@ async def send_parse_failure_notification(file_name: str, error_message: str) ->
 # ── Utility ───────────────────────────────────────────────────────────────────
 
 async def get_telegram_status() -> dict:
-    bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
-    chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
+    bot_token, chat_id = get_telegram_config()
     
     status = {
         "configured": bool(bot_token and chat_id),
