@@ -3,6 +3,7 @@ import { useWebSocket } from '../../context/WebSocketContext';
 import { useInvoiceActions } from '../../hooks/useInvoiceActions';
 import {
   fetchInvoices as fetchInvoicesApi,
+  fetchInvoice as fetchInvoiceApi,
   createInvoice as createInvoiceApi,
   triggerEmailScan,
 } from '../../api/invoiceApi';
@@ -79,6 +80,15 @@ function InvoiceModule() {
   useEffect(() => {
     return subscribe('invoice_created', () => loadInvoices());
   }, [subscribe, loadInvoices]);
+
+  const handleViewInvoice = async (invoiceId) => {
+    try {
+      const fullInvoice = await fetchInvoiceApi(token, invoiceId);
+      setSelectedInvoice(fullInvoice);
+    } catch (err) {
+      setError('Failed to fetch invoice details: ' + err.message);
+    }
+  };
 
   // ── Mail scan ───────────────────────────────────────────────────────────────
 
@@ -276,7 +286,7 @@ function InvoiceModule() {
                   <td>
                     <InvoiceRowActions
                       invoice={invoice}
-                      onView={() => setSelectedInvoice(invoice)}
+                      onView={() => handleViewInvoice(invoice.id)}
                       onApprove={handleApprove}
                       onReject={handleReject}
                       onDelete={handleOpenDeleteModal}
