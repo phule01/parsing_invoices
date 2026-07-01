@@ -20,10 +20,16 @@ async def websocket_endpoint(
     """
     user_id = None
     try:
-        # Verify token and get user ID
-        token_data = decode_token(token)
-        user_id = token_data["user_id"]
-        
+        from fastapi import HTTPException
+        try:
+            # Verify token and get user ID
+            token_data = decode_token(token)
+            user_id = token_data["user_id"]
+        except HTTPException as he:
+            logger.error(f"WebSocket auth failed: {he.detail}")
+            await websocket.close(code=1008, reason="Authentication failed")
+            return
+            
         # Register connection
         await connection_manager.connect(websocket, user_id)
         logger.info(f"WebSocket connected for user {user_id}")

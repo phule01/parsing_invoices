@@ -108,6 +108,12 @@ async def register(
 
 # ── Admin Setup ───────────────────────────────────────────────────────────────
 
+@router.get("/has-admin")
+async def has_admin(db: Session = Depends(get_db)):
+    """Check if any admin user exists in the database. Used to show setup screen."""
+    existing_admin = db.query(User).filter(User.is_admin == True).first()
+    return {"has_admin": bool(existing_admin)}
+
 @router.post("/admin-setup", response_model=TokenResponse)
 async def admin_setup(admin_data: AdminRegister, db: Session = Depends(get_db)):
     """

@@ -28,16 +28,17 @@ function LoginPage() {
     smtp_server: 'smtp.gmail.com',
   });
 
-  // Checkgit if admin exists
+  // Check if admin exists
   useEffect(() => {
     const checkAdmin = async () => {
       try {
-        const response = await fetch(`${API_BASE}/api/auth/validate-token`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-        });
-        // If we can reach the API, we assume admin might exist (simplified check)
-        setAdminExists(false); // Start with false, let backend handle the error
+        const response = await fetch(`${API_BASE}/api/auth/has-admin`);
+        if (response.ok) {
+          const data = await response.json();
+          setAdminExists(data.has_admin);
+        } else {
+          setAdminExists(false);
+        }
       } catch (err) {
         setAdminExists(false);
       }
