@@ -69,11 +69,9 @@ async def get_settings(request: Request, db: Session = Depends(get_db)):
 @router.get("/system")
 async def get_system_settings(request: Request, db: Session = Depends(get_db)):
     """Internal endpoint for email_listener to get full credentials including passwords."""
-    from app.core.security import get_token_from_request, decode_token
-    token = get_token_from_request(request)
-    data = decode_token(token)
-    
-    if not _is_admin(db, data["user_id"]):
+    secret = request.headers.get("X-Internal-Secret")
+    expected_secret = os.getenv("SECRET_KEY", "your-secret-key-change-in-production-use-random-32-chars")
+    if secret != expected_secret:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
         
     admin_user = db.query(User).filter(User.is_admin == True).first()

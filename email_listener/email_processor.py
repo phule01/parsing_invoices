@@ -91,10 +91,11 @@ class APIClient:
     async def get_system_settings(self) -> dict:
         """Fetch system settings (email, token, etc) from the database."""
         try:
+            expected_secret = os.getenv("SECRET_KEY", "your-secret-key-change-in-production-use-random-32-chars")
             async with httpx.AsyncClient(timeout=10) as client:
                 resp = await client.get(
                     f"{self.base_url}/api/settings/system",
-                    headers=self._headers(),
+                    headers={"X-Internal-Secret": expected_secret},
                 )
                 if resp.status_code == 200:
                     return resp.json()
