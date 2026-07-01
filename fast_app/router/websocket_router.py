@@ -27,6 +27,7 @@ async def websocket_endpoint(
             user_id = token_data["user_id"]
         except HTTPException as he:
             logger.error(f"WebSocket auth failed: {he.detail}")
+            await websocket.accept()
             await websocket.close(code=1008, reason="Authentication failed")
             return
             

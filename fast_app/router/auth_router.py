@@ -155,35 +155,31 @@ async def admin_setup(admin_data: AdminRegister, db: Session = Depends(get_db)):
     log_audit(db, user_id=admin_user.id, action="ADMIN_SETUP",
               details="Admin account created with system credentials")
 
-    # Save credentials to .env file and os.environ so the system can actually use them
-    try:
-        from dotenv import set_key
-        from pathlib import Path
-        import os
+    # Note: We no longer write to the .env file.
+    # All settings are persisted safely in the database via the admin_user record.
+    
+    # Immediately register the webhook with the new token
+    import os
+    webhook_url = os.getenv("TELEGRAM_WEBHOOK_URL")
+    if admin_data.telegram_bot_token and webhook_url:
+        import httpx
+        import asyncio
+        from app.services.telegram_service import TELEGRAM_API_URL
         
-        env_file = Path(__file__).parent.parent / ".env"
-        env_updates = {
-            "EMAIL_ADDRESS": admin_data.email,
-            "EMAIL_PASSWORD": admin_data.email_password,
-            "GEMINI_API_KEY": admin_data.gemini_api_key,
-            "TELEGRAM_BOT_TOKEN": admin_data.telegram_bot_token,
-            "TELEGRAM_CHAT_ID": admin_data.telegram_chat_id,
-            "IMAP_SERVER": admin_data.imap_server,
-            "SMTP_SERVER": admin_data.smtp_server,
-        }
-        
-        from app.core.env_utils import update_env_file_in_place
-        update_env_file_in_place(str(env_file), env_updates)
-    except Exception as e:
-        import logging
-        logging.getLogger(__name__).error(f"Failed to update .env during admin setup: {e}")
-        # Delete the admin user so they can try again once permissions are fixed
-        db.delete(admin_user)
-        db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Admin account was NOT created because the server prevented writing to the .env file! Please run 'sudo chown 1000:1000 .env' on your server to fix Linux permissions. Technical error: {str(e)}"
-        )
+        async def _register_webhook():
+            try:
+                async with httpx.AsyncClient(timeout=10) as client:
+                    resp = await client.post(
+                        f"{TELEGRAM_API_URL}/bot{admin_data.telegram_bot_token}/setWebhook",
+                        json={"url": webhook_url},
+                    )
+                    import logging
+                    logging.getLogger(__name__).info(f"Dynamic webhook registration: {resp.text}")
+            except Exception as ex:
+                import logging
+                logging.getLogger(__name__).error(f"Dynamic webhook registration failed: {ex}")
+                
+        asyncio.create_task(_register_webhook())
 
     token = create_access_token(
         user_id=admin_user.id, 

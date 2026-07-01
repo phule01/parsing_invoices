@@ -85,8 +85,18 @@ async def setup_telegram_webhook():
     For local development, you may need to use ngrok or another tunneling service.
     """
     from app.services.telegram_service import TELEGRAM_API_URL
+    from database import SessionLocal
+    from models import User
     
-    bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+    bot_token = None
+    with SessionLocal() as db:
+        admin_user = db.query(User).filter(User.is_admin == True).first()
+        if admin_user and admin_user.telegram_bot_token:
+            bot_token = admin_user.telegram_bot_token.strip()
+            
+    if not bot_token:
+        bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+
     if not bot_token:
         logger.debug("⏭️  Skipping Telegram webhook setup — no bot token configured")
         return

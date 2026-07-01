@@ -127,6 +127,27 @@ async def update_settings(
         db.commit()
         logger.info(f"✅ Updated settings in database: {list(data.keys())}")
         
+        # If Telegram bot token was updated, re-register the webhook
+        if "TELEGRAM_BOT_TOKEN" in data and data["TELEGRAM_BOT_TOKEN"]:
+            webhook_url = os.getenv("TELEGRAM_WEBHOOK_URL")
+            if webhook_url:
+                import httpx
+                import asyncio
+                from app.services.telegram_service import TELEGRAM_API_URL
+                
+                async def _re_register_webhook():
+                    try:
+                        async with httpx.AsyncClient(timeout=10) as client:
+                            resp = await client.post(
+                                f"{TELEGRAM_API_URL}/bot{data['TELEGRAM_BOT_TOKEN']}/setWebhook",
+                                json={"url": webhook_url},
+                            )
+                            logger.info(f"Dynamic webhook re-registration from settings: {resp.text}")
+                    except Exception as ex:
+                        logger.error(f"Dynamic webhook re-registration failed: {ex}")
+                        
+                asyncio.create_task(_re_register_webhook())
+
         return {
             "status": "success",
             "message": "Settings updated successfully in database",
