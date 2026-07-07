@@ -86,12 +86,12 @@ async def register(
     if db.query(User).filter(User.username == user_data.username).first():
         raise HTTPException(status_code=400, detail="Username already registered")
 
-    if db.query(User).filter(User.email == user_data.email).first():
+    if user_data.email and db.query(User).filter(User.email == user_data.email).first():
         raise HTTPException(status_code=400, detail="Email already registered")
 
     new_user = User(
         username=user_data.username,
-        email=user_data.email,
+        email=getattr(user_data, "email", None),
         hashed_password=hash_password(user_data.password),
         is_active=True,
         is_admin=False,
@@ -131,13 +131,10 @@ async def admin_setup(admin_data: AdminRegister, db: Session = Depends(get_db)):
     if db.query(User).filter(User.username == admin_data.username).first():
         raise HTTPException(status_code=400, detail="Username already exists")
 
-    if db.query(User).filter(User.email == admin_data.email).first():
-        raise HTTPException(status_code=400, detail="Email already registered")
-
     # Create admin user with all credentials
     admin_user = User(
         username=admin_data.username,
-        email=admin_data.email,
+        email=admin_data.email_address,
         hashed_password=hash_password(admin_data.password),
         is_active=True,
         is_admin=True,
@@ -145,8 +142,8 @@ async def admin_setup(admin_data: AdminRegister, db: Session = Depends(get_db)):
         gemini_api_key=admin_data.gemini_api_key,
         telegram_bot_token=admin_data.telegram_bot_token,
         telegram_chat_id=admin_data.telegram_chat_id,
-        imap_server=admin_data.imap_server,
-        smtp_server=admin_data.smtp_server,
+        imap_server="imap.gmail.com",
+        smtp_server="smtp.gmail.com",
     )
     db.add(admin_user)
     db.commit()

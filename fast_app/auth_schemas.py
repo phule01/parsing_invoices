@@ -12,21 +12,17 @@ class UserLogin(BaseModel):
 class UserRegister(BaseModel):
     """User registration request."""
     username: str
-    email: EmailStr
     password: str
 
 class AdminRegister(BaseModel):
     """Admin setup/registration request with all credentials."""
     username: str
-    email: EmailStr
     password: str
     email_address: str  # Email to send invoices from
     email_password: str  # Gmail App Password
     gemini_api_key: str
     telegram_bot_token: str
     telegram_chat_id: str
-    imap_server: str = "imap.gmail.com"
-    smtp_server: str = "smtp.gmail.com"
 
 class TokenResponse(BaseModel):
     """Token response."""
@@ -41,7 +37,7 @@ class UserResponse(BaseModel):
     """User response (safe to send to frontend)."""
     id: int
     username: str
-    email: str
+    email: Optional[str] = None
     is_active: bool
     is_admin: bool
     created_at: datetime

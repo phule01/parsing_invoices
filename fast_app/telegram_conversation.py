@@ -16,7 +16,6 @@ _conversation_states: Dict[int, Dict[str, Any]] = {}
 # Conversation state constants
 STATE_IDLE = "idle"
 STATE_ADD_USERNAME = "add_username"
-STATE_ADD_EMAIL = "add_email"
 STATE_ADD_PASSWORD = "add_password"
 STATE_ADD_ROLE = "add_role"
 STATE_DELETE_USERNAME = "delete_username"

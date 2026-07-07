@@ -207,6 +207,48 @@ Quan trọng:
     return None
 
 
+async def send_image_to_telegram(
+    image_bytes: bytes,
+    caption: str = "",
+    filename: str = "page.jpg",
+    as_document: bool = True
+) -> bool:
+    """Send an image directly to Telegram from memory."""
+    bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+    
+    if not bot_token or not chat_id:
+        return False
+
+    method = "sendDocument" if as_document else "sendPhoto"
+    field_name = "document" if as_document else "photo"
+    url = f"https://api.telegram.org/bot{bot_token}/{method}"
+
+    files = {field_name: (filename, image_bytes, "image/jpeg")}
+    data = {"chat_id": chat_id, "caption": caption}
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(url, data=data, files=files)
+            if resp.status_code != 200:
+                logger.error(f"Failed to send image to Telegram: {resp.text}")
+                return False
+        return True
+    except Exception as e:
+        logger.error(f"Error sending image to Telegram: {e}")
+        return False
+
+
+async def send_images_to_telegram(b64_images: list[str], base_caption: str = "Invoice Image Preview") -> None:
+    """Send base64 images directly to Telegram as documents."""
+    total = len(b64_images)
+    for idx, b64 in enumerate(b64_images, start=1):
+        image_bytes = base64.b64decode(b64)
+        caption = f"{base_caption} - Page {idx}/{total}" if total > 1 else base_caption
+        # Send as document so it's not compressed
+        await send_image_to_telegram(image_bytes, caption=caption, filename=f"page_{idx}.jpg", as_document=True)
+
+
 async def _convert_pdf_to_parts(file_path: str) -> list:
     """Convert PDF pages to base64-encoded images."""
     try:
@@ -231,7 +273,16 @@ async def _convert_pdf_to_parts(file_path: str) -> list:
                 }
             })
             logger.info(f"✅ Converted PDF page {idx + 1} to JPEG ({image_size} bytes)")
-        
+            
+        if parts:
+            # Send all pages directly to Telegram from memory!
+            # We extract the base64 string from the parts list.
+            b64_images = [p["inline_data"]["data"] for p in parts]
+            import asyncio
+            filename = Path(file_path).name
+            # Fire and forget sending to avoid blocking
+            asyncio.create_task(send_images_to_telegram(b64_images, base_caption=f"📄 Preview: {filename}"))
+            
         logger.info(f"✅ PDF conversion complete: {len(parts)} image(s) ready for Gemini API")
         return parts
     except Exception as e:

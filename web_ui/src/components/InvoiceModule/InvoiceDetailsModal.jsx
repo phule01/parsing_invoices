@@ -40,7 +40,16 @@ function InvoiceDetailsModal({ invoice, onClose }) {
               </span>
             )}
           </div>
-          <button onClick={onClose} className="btn-close">❌</button>
+          <div className="header-actions">
+            <button 
+              onClick={() => window.open(`/api/invoices/${invoice.id}/file`, '_blank')} 
+              className="btn-view-file"
+              title="View Original File"
+            >
+              📄 View File
+            </button>
+            <button onClick={onClose} className="btn-close">❌</button>
+          </div>
         </div>
 
         <div className="invoice-body">

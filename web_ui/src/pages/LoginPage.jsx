@@ -17,15 +17,12 @@ function LoginPage() {
   // Admin Setup Form
   const [adminForm, setAdminForm] = useState({
     username: '',
-    email: '',
     password: '',
     email_address: '',
     email_password: '',
     gemini_api_key: '',
     telegram_bot_token: '',
     telegram_chat_id: '',
-    imap_server: 'imap.gmail.com',
-    smtp_server: 'smtp.gmail.com',
   });
 
   // Check if admin exists
@@ -63,8 +60,8 @@ function LoginPage() {
     setLocalError('');
 
     // Validate required fields
-    if (!adminForm.username || !adminForm.email || !adminForm.password) {
-      setLocalError('Username, email, and password are required');
+    if (!adminForm.username || !adminForm.password) {
+      setLocalError('Username and password are required');
       return;
     }
 
@@ -193,20 +190,6 @@ function LoginPage() {
                       required
                     />
                   </div>
-
-                  <div className="form-group">
-                    <label htmlFor="admin_email">Email</label>
-                    <input
-                      id="admin_email"
-                      type="email"
-                      name="email"
-                      value={adminForm.email}
-                      onChange={handleAdminFormChange}
-                      placeholder="admin@example.com"
-                      disabled={loading}
-                      required
-                    />
-                  </div>
                 </div>
 
                 <div className="form-group">
@@ -258,34 +241,6 @@ function LoginPage() {
                   <small>
                     ⚠️ Use <a href="https://support.google.com/accounts/answer/185833" target="_blank" rel="noopener noreferrer">Gmail App Password</a>, not your regular password. Enable 2FA first.
                   </small>
-                </div>
-
-                <div className="form-row">
-                  <div className="form-group">
-                    <label htmlFor="imap_server">IMAP Server</label>
-                    <input
-                      id="imap_server"
-                      type="text"
-                      name="imap_server"
-                      value={adminForm.imap_server}
-                      onChange={handleAdminFormChange}
-                      placeholder="imap.gmail.com"
-                      disabled={loading}
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label htmlFor="smtp_server">SMTP Server</label>
-                    <input
-                      id="smtp_server"
-                      type="text"
-                      name="smtp_server"
-                      value={adminForm.smtp_server}
-                      onChange={handleAdminFormChange}
-                      placeholder="smtp.gmail.com"
-                      disabled={loading}
-                    />
-                  </div>
                 </div>
               </fieldset>
 

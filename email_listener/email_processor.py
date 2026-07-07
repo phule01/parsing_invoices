@@ -564,6 +564,7 @@ async def main_loop(api: APIClient):
         # 2. Check for missing critical configuration
         gemini_key = settings.get("GEMINI_API_KEY", "")
         bot_token = settings.get("TELEGRAM_BOT_TOKEN", "")
+        chat_id = settings.get("TELEGRAM_CHAT_ID", "")
         email_pass = settings.get("EMAIL_PASSWORD", "")
         
         if not gemini_key or not bot_token or not email_pass:
@@ -578,8 +579,10 @@ async def main_loop(api: APIClient):
         EMAIL_ADDRESS = settings.get("EMAIL_ADDRESS", "")
         EMAIL_PASSWORD = email_pass
         
-        # Store Gemini API Key in environment for ai_parser to pick up dynamically
+        # Store API keys in environment for ai_parser to pick up dynamically
         os.environ["GEMINI_API_KEY"] = gemini_key
+        os.environ["TELEGRAM_BOT_TOKEN"] = bot_token
+        os.environ["TELEGRAM_CHAT_ID"] = str(chat_id)
 
         mail = None
         try:

@@ -35,7 +35,7 @@ from app.services.telegram_service import (
 from telegram_conversation import (
     start_conversation, get_conversation_state, get_conversation_data,
     update_conversation_data, end_conversation,
-    STATE_IDLE, STATE_ADD_USERNAME, STATE_ADD_EMAIL, STATE_ADD_PASSWORD, STATE_ADD_ROLE,
+    STATE_IDLE, STATE_ADD_USERNAME, STATE_ADD_PASSWORD, STATE_ADD_ROLE,
     STATE_DELETE_USERNAME, STATE_CHANGE_USERNAME, STATE_CHANGE_PASSWORD,
 )
 
@@ -343,7 +343,7 @@ async def handle_account_command(text: str, chat_id: int, db: Session) -> dict:
 
     # Multi-step flows
     if command == "/addaccount" or current_state in (
-        STATE_ADD_USERNAME, STATE_ADD_EMAIL, STATE_ADD_PASSWORD, STATE_ADD_ROLE
+        STATE_ADD_USERNAME, STATE_ADD_PASSWORD, STATE_ADD_ROLE
     ):
         return await _add_account_flow(text, chat_id, db)
 
@@ -369,10 +369,19 @@ async def _add_account_flow(text: str, chat_id: int, db: Session) -> dict:
     state = get_conversation_state(chat_id)
 
     if state == STATE_IDLE:
-        start_conversation(chat_id, STATE_ADD_USERNAME)
+        start_conversation(chat_id, STATE_ADD_ROLE)
+        keyboard = {
+            "inline_keyboard": [
+                [
+                    {"text": "👑 Admin", "callback_data": "role_admin"},
+                    {"text": "👤 Standard User", "callback_data": "role_user"}
+                ]
+            ]
+        }
         await send_message(
-            "📝 <b>Add New Account</b>\n\nStep 1️⃣: Enter the <b>username</b>",
+            "📝 <b>Add New Account</b>\n\nStep 1️⃣: Select the Account Type:",
             chat_id=str(chat_id),
+            reply_markup=keyboard
         )
         return {"status": "ok"}
 
@@ -385,21 +394,8 @@ async def _add_account_flow(text: str, chat_id: int, db: Session) -> dict:
             await send_message(f"❌ Username '<b>{username}</b>' already exists.\n\nTry another:", chat_id=str(chat_id))
             return {"status": "exists"}
         update_conversation_data(chat_id, "username", username)
-        start_conversation(chat_id, STATE_ADD_EMAIL, get_conversation_data(chat_id))
-        await send_message(f"✅ Username: <b>{username}</b>\n\nStep 2️⃣: Enter the <b>email address</b>", chat_id=str(chat_id))
-        return {"status": "ok"}
-
-    if state == STATE_ADD_EMAIL:
-        email = text.strip()
-        if "@" not in email or "." not in email:
-            await send_message("❌ Please enter a valid email address.\n\nTry again:", chat_id=str(chat_id))
-            return {"status": "invalid"}
-        if db.query(User).filter(User.email == email).first():
-            await send_message(f"❌ Email '<b>{email}</b>' already exists.\n\nTry another:", chat_id=str(chat_id))
-            return {"status": "exists"}
-        update_conversation_data(chat_id, "email", email)
         start_conversation(chat_id, STATE_ADD_PASSWORD, get_conversation_data(chat_id))
-        await send_message(f"✅ Email: <b>{email}</b>\n\nStep 3️⃣: Enter the <b>password</b>", chat_id=str(chat_id))
+        await send_message(f"✅ Username: <b>{username}</b>\n\nStep 3️⃣: Enter the <b>password</b>", chat_id=str(chat_id))
         return {"status": "ok"}
 
     if state == STATE_ADD_PASSWORD:
@@ -407,30 +403,14 @@ async def _add_account_flow(text: str, chat_id: int, db: Session) -> dict:
         if len(password) < 4:
             await send_message("❌ Password must be at least 4 characters.\n\nTry again:", chat_id=str(chat_id))
             return {"status": "invalid"}
-        update_conversation_data(chat_id, "password", password)
-        start_conversation(chat_id, STATE_ADD_ROLE, get_conversation_data(chat_id))
-        
-        # Create an inline keyboard to choose the role (or just text reply)
-        # We will just ask for text reply for simplicity and consistency with other states.
-        await send_message(
-            f"✅ Password set\n\nStep 4️⃣: Should this account be an Admin?\nReply with <b>yes</b> or <b>no</b>:", 
-            chat_id=str(chat_id)
-        )
-        return {"status": "ok"}
-        
-    if state == STATE_ADD_ROLE:
-        role_resp = text.strip().lower()
-        if role_resp not in ("yes", "no", "y", "n"):
-            await send_message("❌ Please reply with 'yes' or 'no':", chat_id=str(chat_id))
-            return {"status": "invalid"}
-            
-        is_admin = role_resp in ("yes", "y")
         
         data = get_conversation_data(chat_id)
+        is_admin = data.get("is_admin", False)
+        
         new_user = User(
             username=data["username"],
-            email=data["email"],
-            hashed_password=hash_password(data["password"]),
+            email=None,
+            hashed_password=hash_password(password),
             is_active=True,
             is_admin=is_admin,
         )
@@ -441,12 +421,58 @@ async def _add_account_flow(text: str, chat_id: int, db: Session) -> dict:
         
         role_str = "👑 Admin" if is_admin else "👤 Standard User"
         await send_message(
-            f"✅ <b>Account Created!</b>\n\nUsername: <b>{data['username']}</b>\nEmail: <b>{data['email']}</b>\nRole: <b>{role_str}</b>",
+            f"✅ <b>Account Created!</b>\n\nUsername: <b>{data['username']}</b>\nRole: <b>{role_str}</b>",
             chat_id=str(chat_id),
         )
         return {"status": "ok", "user_id": new_user.id}
 
     return {"status": "error"}
+
+
+async def handle_role_callback(
+    callback_data: str,
+    callback_id: str,
+    chat_id: int,
+    message_id: int,
+    db: Session,
+) -> dict:
+    """
+    Handle inline button clicks for role selection in /addaccount flow.
+    """
+    state = get_conversation_state(chat_id)
+    if state != STATE_ADD_ROLE:
+        return {"status": "error", "msg": "Not in role selection state"}
+
+    is_admin = (callback_data == "role_admin")
+    update_conversation_data(chat_id, "is_admin", is_admin)
+    
+    role_str = "👑 Admin" if is_admin else "👤 Standard User"
+    
+    # Acknowledge callback and remove inline keyboard
+    admin = db.query(User).filter(User.is_admin == True).first()
+    bot_token = admin.telegram_bot_token if admin else os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+    
+    if bot_token:
+        async with httpx.AsyncClient(timeout=10) as client:
+            await client.post(
+                f"{TELEGRAM_API_URL}/bot{bot_token}/editMessageText",
+                json={
+                    "chat_id": chat_id,
+                    "message_id": message_id,
+                    "text": f"✅ Selected Role: <b>{role_str}</b>",
+                    "parse_mode": "HTML",
+                    "reply_markup": {"inline_keyboard": []},
+                },
+            )
+            await client.post(
+                f"{TELEGRAM_API_URL}/bot{bot_token}/answerCallbackQuery",
+                json={"callback_query_id": callback_id},
+            )
+
+    start_conversation(chat_id, STATE_ADD_USERNAME, get_conversation_data(chat_id))
+    await send_message("Step 2️⃣: Enter the <b>username</b>", chat_id=str(chat_id))
+    return {"status": "ok"}
+
 
 
 async def _delete_account_flow(text: str, chat_id: int, db: Session) -> dict:

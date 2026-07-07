@@ -112,6 +112,53 @@ async def send_message_with_metadata(
     return {"ok": False, "message_id": None, "chat_id": str(target) if target else None}
 
 
+async def send_photo_with_metadata(
+    photo_path: str,
+    caption: str,
+    chat_id: Optional[str] = None,
+    reply_markup: Optional[dict] = None,
+) -> dict:
+    """Send a photo with caption and return message metadata."""
+    db_bot_token, db_chat_id = get_telegram_config()
+    bot_token = db_bot_token
+    chat_id_target = chat_id or db_chat_id
+    if not bot_token or not chat_id_target:
+        return {"ok": False, "message_id": None, "chat_id": None}
+
+    target = chat_id_target
+    
+    import aiofiles
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            with open(photo_path, "rb") as f:
+                files = {"document": ("preview.jpg", f, "image/jpeg")}
+                data = {
+                    "chat_id": target,
+                    "caption": caption,
+                    "parse_mode": "HTML",
+                }
+                if reply_markup:
+                    import json
+                    data["reply_markup"] = json.dumps(reply_markup)
+                    
+                resp = await client.post(
+                    f"{TELEGRAM_API_URL}/bot{bot_token}/sendDocument",
+                    data=data,
+                    files=files
+                )
+                resp.raise_for_status()
+                resp_data = resp.json()
+                if resp_data.get("ok"):
+                    msg_id = resp_data.get("result", {}).get("message_id")
+                    logger.info("✅ Telegram document sent (msg_id=%s)", msg_id)
+                    return {"ok": True, "message_id": msg_id, "chat_id": str(target)}
+                logger.error("❌ Telegram API error (sendDocument): %s", resp_data.get("description"))
+    except Exception as exc:
+        logger.error("❌ Error sending Telegram photo: %s", exc)
+
+    return {"ok": False, "message_id": None, "chat_id": str(target) if target else None}
+
+
 async def edit_message(
     chat_id: str,
     message_id: int,
@@ -169,6 +216,7 @@ async def send_invoice_approval_request(
     total_amount: float,
     num_items: int = 0,
     items: Optional[list] = None,
+    raw_file_path: Optional[str] = None,
 ) -> bool:
     """
     Send an invoice to Telegram with YES/NO inline buttons.

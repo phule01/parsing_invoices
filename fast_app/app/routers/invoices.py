@@ -144,6 +144,35 @@ async def get_invoice(
     return invoice
 
 
+@router.get("/{invoice_id}/file")
+async def get_invoice_file(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+):
+    from fastapi.responses import FileResponse
+    from pathlib import Path
+    
+    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+    if not invoice or not invoice.raw_file_path:
+        raise HTTPException(status_code=404, detail="File not found in database")
+        
+    file_path = Path(invoice.raw_file_path)
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found on disk")
+        
+    media_type = "application/pdf"
+    if file_path.suffix.lower() == ".xml":
+        media_type = "application/xml"
+    elif file_path.suffix.lower() in [".png", ".jpg", ".jpeg"]:
+        media_type = f"image/{file_path.suffix.lower().lstrip('.')}"
+        
+    return FileResponse(
+        path=file_path, 
+        filename=file_path.name,
+        media_type=media_type
+    )
+
+
 # ── Create ────────────────────────────────────────────────────────────────────
 
 @router.post("/", response_model=InvoiceResponse)
@@ -194,6 +223,10 @@ async def create_invoice(
         total_amount=total_amount,
         source_type=getattr(invoice_data, "source_type", None),
         source_email=getattr(invoice_data, "source_email", None),
+        raw_file_path=getattr(invoice_data, "raw_file_path", None),
+        file_format=getattr(invoice_data, "file_format", None),
+        ai_confidence=getattr(invoice_data, "ai_confidence", 0),
+        signatures=getattr(invoice_data, "signatures", None),
         status="pending",
         user_id=user_id,
     )
@@ -234,6 +267,7 @@ async def create_invoice(
         total_amount=float(db_invoice.total_amount),
         num_items=len(db_invoice.items),
         items=items_payload,
+        raw_file_path=db_invoice.raw_file_path,
     )
 
     return db_invoice

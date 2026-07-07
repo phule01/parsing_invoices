@@ -12,7 +12,7 @@ function SettingsModule() {
   const [testInProgress, setTestInProgress] = useState('');
   
   // User Management State
-  const [newUser, setNewUser] = useState({ username: '', email: '', password: '' });
+  const [newUser, setNewUser] = useState({ username: '', password: '' });
   const [userLoading, setUserLoading] = useState(false);
   const [userSuccess, setUserSuccess] = useState('');
   const [userError, setUserError] = useState('');
@@ -21,10 +21,6 @@ function SettingsModule() {
     EMAIL_ADDRESS: '',
     EMAIL_PASSWORD: '',
     GEMINI_API_KEY: '',
-    TELEGRAM_BOT_TOKEN: '',
-    TELEGRAM_CHAT_ID: '',
-    IMAP_SERVER: '',
-    SMTP_SERVER: '',
   });
 
   // Fetch current settings
@@ -106,8 +102,7 @@ function SettingsModule() {
         body: JSON.stringify({
           target_email: settings.EMAIL_ADDRESS,
           email_address: settings.EMAIL_ADDRESS,
-          email_password: settings.EMAIL_PASSWORD || '',
-          smtp_server: settings.SMTP_SERVER || 'smtp.gmail.com'
+          email_password: settings.EMAIL_PASSWORD || ''
         })
       });
 
@@ -205,12 +200,6 @@ function SettingsModule() {
           <p>
             <strong>Email Address:</strong> {settings.EMAIL_ADDRESS || 'Not configured'}
           </p>
-          <p>
-            <strong>IMAP Server:</strong> {settings.IMAP_SERVER || 'Not configured'}
-          </p>
-          <p>
-            <strong>SMTP Server:</strong> {settings.SMTP_SERVER || 'Not configured'}
-          </p>
         </div>
         
         <div className="settings-info" style={{marginTop: '20px'}}>
@@ -257,54 +246,6 @@ function SettingsModule() {
               onChange={handleChange}
               placeholder="••••••••••••••••"
             />
-            <small>
-              📝 Use{' '}
-              <a href="https://support.google.com/accounts/answer/185833" target="_blank" rel="noopener noreferrer">
-                Gmail App Password
-              </a>
-              , not your regular password
-            </small>
-          </div>
-
-          <div className="form-row">
-            <div className="form-group">
-              <label htmlFor="SMTP_SERVER">SMTP Server</label>
-              <input
-                id="SMTP_SERVER"
-                type="text"
-                name="SMTP_SERVER"
-                value={settings.SMTP_SERVER}
-                onChange={handleChange}
-                placeholder="smtp.gmail.com"
-              />
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleTestEmail}
-            disabled={testInProgress === 'email'}
-            className="btn-test"
-          >
-            {testInProgress === 'email' ? '⏳ Testing...' : '🧪 Test Email'}
-          </button>
-        </fieldset>
-
-        {/* IMAP Configuration */}
-        <fieldset className="settings-section">
-          <legend>📥 Email Listener Configuration (IMAP)</legend>
-
-          <div className="form-group">
-            <label htmlFor="IMAP_SERVER">IMAP Server</label>
-            <input
-              id="IMAP_SERVER"
-              type="text"
-              name="IMAP_SERVER"
-              value={settings.IMAP_SERVER}
-              onChange={handleChange}
-              placeholder="imap.gmail.com"
-            />
-            <small>Server to receive and monitor invoices</small>
           </div>
         </fieldset>
 
@@ -331,51 +272,6 @@ function SettingsModule() {
           </div>
         </fieldset>
 
-        {/* Telegram Configuration */}
-        <fieldset className="settings-section">
-          <legend>🤖 Telegram Bot Configuration</legend>
-
-          <div className="form-group">
-            <label htmlFor="TELEGRAM_BOT_TOKEN">Bot Token</label>
-            <input
-              id="TELEGRAM_BOT_TOKEN"
-              type="password"
-              name="TELEGRAM_BOT_TOKEN"
-              value={settings.TELEGRAM_BOT_TOKEN}
-              onChange={handleChange}
-              placeholder="••••••••••••••••••••••••••••••••••••••"
-            />
-            <small>
-              Get from{' '}
-              <a href="https://t.me/botfather" target="_blank" rel="noopener noreferrer">
-                @BotFather on Telegram
-              </a>
-            </small>
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="TELEGRAM_CHAT_ID">Chat ID</label>
-            <input
-              id="TELEGRAM_CHAT_ID"
-              type="text"
-              name="TELEGRAM_CHAT_ID"
-              value={settings.TELEGRAM_CHAT_ID}
-              onChange={handleChange}
-              placeholder="123456789"
-            />
-            <small>Your Telegram chat ID (for receiving notifications)</small>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleTestTelegram}
-            disabled={testInProgress === 'telegram'}
-            className="btn-test"
-          >
-            {testInProgress === 'telegram' ? '⏳ Testing...' : '🧪 Test Telegram'}
-          </button>
-        </fieldset>
-
         {/* Submit Button */}
         <div className="form-actions">
           <button type="submit" disabled={loading} className="btn-primary">
@@ -390,7 +286,6 @@ function SettingsModule() {
           <li>✅ All settings are saved to the server's environment</li>
           <li>🔒 Passwords are stored securely in the .env file</li>
           <li>🔄 Changes take effect immediately</li>
-          <li>🧪 Use the test buttons to verify your configuration</li>
           <li>📋 Only admin users can modify these settings</li>
         </ul>
       </div>
@@ -415,18 +310,6 @@ function SettingsModule() {
               value={newUser.username}
               onChange={(e) => setNewUser({...newUser, username: e.target.value})}
               placeholder="Username"
-              required
-            />
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="new_email">Email</label>
-            <input
-              id="new_email"
-              type="email"
-              value={newUser.email}
-              onChange={(e) => setNewUser({...newUser, email: e.target.value})}
-              placeholder="user@example.com"
               required
             />
           </div>
