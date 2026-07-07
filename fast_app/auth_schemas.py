@@ -215,3 +215,23 @@ class RealTimeNotification(BaseModel):
     data: dict
     user_id: Optional[int] = None
     source: str  # web, telegram, api
+
+
+# ==================== Email Log Schemas ====================
+
+class EmailLogResponse(BaseModel):
+    """Email processing log entry."""
+    id: int
+    invoice_id: Optional[int] = None
+    email_from: Optional[str] = None
+    email_subject: Optional[str] = None
+    attachment_name: Optional[str] = None
+    file_url: Optional[str] = None
+    message_id: Optional[str] = None
+    status: str
+    error_message: Optional[str] = None
+    processed_at: Optional[datetime] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

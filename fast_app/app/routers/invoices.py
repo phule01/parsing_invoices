@@ -37,9 +37,9 @@ from auth_schemas import (
 )
 from app.core.security import decode_token
 from websocket_manager import connection_manager
-from telegram_utils import (
+from app.services.telegram_service import (
     broadcast_to_web_ui,
-    send_telegram_message,
+    send_message as send_telegram_message,
     send_invoice_approval_request,
 )
 from app.services.invoice_service import InvoiceService, ProductUpdate

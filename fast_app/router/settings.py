@@ -54,7 +54,7 @@ async def get_settings(request: Request, db: Session = Depends(get_db)):
         return {
             "EMAIL_ADDRESS": admin_user.email if admin_user and admin_user.email else os.getenv("EMAIL_ADDRESS", ""),
             "GEMINI_API_KEY": admin_user.gemini_api_key if admin_user and admin_user.gemini_api_key else os.getenv("GEMINI_API_KEY", ""),
-            "TELEGRAM_BOT_TOKEN": current_user.telegram_bot_token or "",
+            "TELEGRAM_BOT_TOKEN": admin_user.telegram_bot_token if admin_user and admin_user.telegram_bot_token else os.getenv("TELEGRAM_BOT_TOKEN", ""),
             "TELEGRAM_CHAT_ID": current_user.telegram_chat_id or "",
             "IMAP_SERVER": admin_user.imap_server if admin_user and admin_user.imap_server else os.getenv("IMAP_SERVER", "imap.gmail.com"),
             "SMTP_SERVER": admin_user.smtp_server if admin_user and admin_user.smtp_server else os.getenv("SMTP_SERVER", "smtp.gmail.com"),
@@ -66,7 +66,7 @@ async def get_settings(request: Request, db: Session = Depends(get_db)):
             "IMAP_SERVER": admin_user.imap_server if admin_user and admin_user.imap_server else os.getenv("IMAP_SERVER", "imap.gmail.com"),
             "SMTP_SERVER": admin_user.smtp_server if admin_user and admin_user.smtp_server else os.getenv("SMTP_SERVER", "smtp.gmail.com"),
             "GEMINI_API_KEY": "",
-            "TELEGRAM_BOT_TOKEN": current_user.telegram_bot_token or "",
+            "TELEGRAM_BOT_TOKEN": "",
             "TELEGRAM_CHAT_ID": current_user.telegram_chat_id or "",
         }
 
@@ -123,10 +123,10 @@ async def update_settings(
                 admin_user.email_password = data["EMAIL_PASSWORD"]
             if "GEMINI_API_KEY" in data:
                 admin_user.gemini_api_key = data["GEMINI_API_KEY"]
+            if "TELEGRAM_BOT_TOKEN" in data:
+                admin_user.telegram_bot_token = data["TELEGRAM_BOT_TOKEN"]
 
         # User-specific Settings (All Users)
-        if "TELEGRAM_BOT_TOKEN" in data:
-            current_user.telegram_bot_token = data["TELEGRAM_BOT_TOKEN"]
         if "TELEGRAM_CHAT_ID" in data:
             current_user.telegram_chat_id = data["TELEGRAM_CHAT_ID"]
             

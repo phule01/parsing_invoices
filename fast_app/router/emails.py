@@ -15,9 +15,9 @@ import logging
 
 from database import get_db
 from models import EmailLog
-from schemas import EmailLogResponse
+from auth_schemas import EmailLogResponse
 from app.core.security import decode_token
-from telegram_utils import broadcast_to_web_ui, send_invoice_approval_request, send_telegram_message
+from app.services.telegram_service import broadcast_to_web_ui, send_invoice_approval_request, send_message as send_telegram_message
 
 logger = logging.getLogger(__name__)
 

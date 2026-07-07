@@ -308,6 +308,23 @@ function SettingsModule() {
             </small>
           </div>
         </fieldset>
+
+        {/* Telegram Configuration */}
+        <fieldset className="settings-section">
+          <legend>🤖 Telegram Bot Token (Global)</legend>
+          <div className="form-group">
+            <label htmlFor="TELEGRAM_BOT_TOKEN">Telegram Bot Token</label>
+            <input
+              id="TELEGRAM_BOT_TOKEN"
+              type="password"
+              name="TELEGRAM_BOT_TOKEN"
+              value={settings.TELEGRAM_BOT_TOKEN}
+              onChange={handleChange}
+              placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
+            />
+            <small>This bot will be used to send notifications to all users.</small>
+          </div>
+        </fieldset>
       </>
     );
   };
@@ -324,19 +341,7 @@ function SettingsModule() {
         
         {/* Personal Telegram Configuration (All Users) */}
         <fieldset className="settings-section">
-          <legend>📱 Personal Telegram Bot (Approval Notifications)</legend>
-
-          <div className="form-group">
-            <label htmlFor="TELEGRAM_BOT_TOKEN">Telegram Bot Token</label>
-            <input
-              id="TELEGRAM_BOT_TOKEN"
-              type="password"
-              name="TELEGRAM_BOT_TOKEN"
-              value={settings.TELEGRAM_BOT_TOKEN}
-              onChange={handleChange}
-              placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
-            />
-          </div>
+          <legend>📱 Personal Telegram Notification</legend>
 
           <div className="form-group">
             <label htmlFor="TELEGRAM_CHAT_ID">Telegram Chat ID</label>
@@ -348,7 +353,7 @@ function SettingsModule() {
               onChange={handleChange}
               placeholder="123456789"
             />
-            <small>Your personal Chat ID to receive approval requests.</small>
+            <small>Your personal Chat ID to receive approval requests from the central bot.</small>
           </div>
         </fieldset>
 

@@ -42,7 +42,7 @@ from router import (
     settings,
 )
 
-from telegram_utils import get_telegram_status
+from app.services.telegram_service import get_telegram_status
 
 load_dotenv()
 

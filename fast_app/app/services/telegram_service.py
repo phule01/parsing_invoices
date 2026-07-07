@@ -313,37 +313,41 @@ async def send_invoice_approval_request(
     from models import User, InvoiceNotification
 
     at_least_one_success = False
-    try:
-        with SessionLocal() as db:
-            users = db.query(User).filter(
-                User.is_active == True,
-                User.telegram_bot_token.isnot(None),
-                User.telegram_bot_token != "",
-                User.telegram_chat_id.isnot(None),
-                User.telegram_chat_id != ""
-            ).all()
-
-            for u in users:
-                res = await send_message_to_user(
-                    message, 
-                    bot_token=u.telegram_bot_token, 
-                    chat_id=u.telegram_chat_id, 
-                    reply_markup=reply_markup
-                )
-                if res["ok"]:
-                    notif = InvoiceNotification(
-                        invoice_id=invoice_id,
-                        user_id=u.id,
-                        bot_token=u.telegram_bot_token,
-                        chat_id=u.telegram_chat_id,
-                        message_id=str(res["message_id"])
+    
+    global_bot_token, _ = get_telegram_config()
+    
+    if global_bot_token:
+        try:
+            with SessionLocal() as db:
+                users = db.query(User).filter(
+                    User.is_active == True,
+                    User.telegram_chat_id.isnot(None),
+                    User.telegram_chat_id != ""
+                ).all()
+    
+                for u in users:
+                    res = await send_message_to_user(
+                        message, 
+                        bot_token=global_bot_token, 
+                        chat_id=u.telegram_chat_id, 
+                        reply_markup=reply_markup
                     )
-                    db.add(notif)
-                    at_least_one_success = True
-            
-            db.commit()
-    except Exception as e:
-        logger.error(f"Error broadcasting invoice approval request: {e}")
+                    if res["ok"]:
+                        notif = InvoiceNotification(
+                            invoice_id=invoice_id,
+                            user_id=u.id,
+                            bot_token=global_bot_token,
+                            chat_id=u.telegram_chat_id,
+                            message_id=str(res["message_id"])
+                        )
+                        db.add(notif)
+                        at_least_one_success = True
+                
+                db.commit()
+        except Exception as e:
+            logger.error(f"Error broadcasting invoice approval request: {e}")
+    else:
+        logger.warning("No global TELEGRAM_BOT_TOKEN found. Cannot send notifications.")
 
     await broadcast_to_web_ui({
         "type": "invoice_received",
@@ -389,19 +393,21 @@ async def send_invoice_status(
     # Broadcast status to all configured users
     from database import SessionLocal
     from models import User
-    try:
-        with SessionLocal() as db:
-            users = db.query(User).filter(
-                User.is_active == True,
-                User.telegram_bot_token.isnot(None),
-                User.telegram_bot_token != "",
-                User.telegram_chat_id.isnot(None),
-                User.telegram_chat_id != ""
-            ).all()
-            for u in users:
-                await send_message_to_user(message, u.telegram_bot_token, u.telegram_chat_id)
-    except Exception as e:
-        logger.error(f"Error broadcasting invoice status: {e}")
+    
+    global_bot_token, _ = get_telegram_config()
+    
+    if global_bot_token:
+        try:
+            with SessionLocal() as db:
+                users = db.query(User).filter(
+                    User.is_active == True,
+                    User.telegram_chat_id.isnot(None),
+                    User.telegram_chat_id != ""
+                ).all()
+                for u in users:
+                    await send_message_to_user(message, global_bot_token, u.telegram_chat_id)
+        except Exception as e:
+            logger.error(f"Error broadcasting invoice status: {e}")
     await broadcast_to_web_ui({
         "type": notif_type,
         "title": title,
