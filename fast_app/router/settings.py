@@ -44,26 +44,30 @@ async def get_settings(request: Request, db: Session = Depends(get_db)):
     
     # We fetch the first admin user to store global settings
     admin_user = db.query(User).filter(User.is_admin == True).first()
-    is_admin = _is_admin(db, data["user_id"])
+    current_user = db.query(User).filter(User.id == data["user_id"]).first()
+    if not current_user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    is_admin = current_user.is_admin
     
     if is_admin:
         return {
             "EMAIL_ADDRESS": admin_user.email if admin_user and admin_user.email else os.getenv("EMAIL_ADDRESS", ""),
             "GEMINI_API_KEY": admin_user.gemini_api_key if admin_user and admin_user.gemini_api_key else os.getenv("GEMINI_API_KEY", ""),
-            "TELEGRAM_BOT_TOKEN": admin_user.telegram_bot_token if admin_user and admin_user.telegram_bot_token else os.getenv("TELEGRAM_BOT_TOKEN", ""),
-            "TELEGRAM_CHAT_ID": admin_user.telegram_chat_id if admin_user and admin_user.telegram_chat_id else os.getenv("TELEGRAM_CHAT_ID", ""),
+            "TELEGRAM_BOT_TOKEN": current_user.telegram_bot_token or "",
+            "TELEGRAM_CHAT_ID": current_user.telegram_chat_id or "",
             "IMAP_SERVER": admin_user.imap_server if admin_user and admin_user.imap_server else os.getenv("IMAP_SERVER", "imap.gmail.com"),
             "SMTP_SERVER": admin_user.smtp_server if admin_user and admin_user.smtp_server else os.getenv("SMTP_SERVER", "smtp.gmail.com"),
         }
     else:
-        # Standard users only see the email address to verify it's working
+        # Standard users see email address to verify it's working, and their own Telegram config
         return {
             "EMAIL_ADDRESS": admin_user.email if admin_user and admin_user.email else os.getenv("EMAIL_ADDRESS", ""),
             "IMAP_SERVER": admin_user.imap_server if admin_user and admin_user.imap_server else os.getenv("IMAP_SERVER", "imap.gmail.com"),
             "SMTP_SERVER": admin_user.smtp_server if admin_user and admin_user.smtp_server else os.getenv("SMTP_SERVER", "smtp.gmail.com"),
             "GEMINI_API_KEY": "",
-            "TELEGRAM_BOT_TOKEN": "",
-            "TELEGRAM_CHAT_ID": "",
+            "TELEGRAM_BOT_TOKEN": current_user.telegram_bot_token or "",
+            "TELEGRAM_CHAT_ID": current_user.telegram_chat_id or "",
         }
 
 @router.get("/system")
@@ -100,32 +104,34 @@ async def update_settings(
     token = get_token_from_request(request)
     decoded = decode_token(token)
     
-    if not _is_admin(db, decoded["user_id"]):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only admins can update settings"
-        )
+    current_user = db.query(User).filter(User.id == decoded["user_id"]).first()
+    if not current_user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    is_admin = current_user.is_admin
     
     try:
-        admin_user = db.query(User).filter(User.is_admin == True).first()
-        if not admin_user:
-            raise Exception("No admin user found to save settings to")
-            
-        # Update admin user fields
-        if "EMAIL_ADDRESS" in data:
-            admin_user.email = data["EMAIL_ADDRESS"]
-        if "EMAIL_PASSWORD" in data and data["EMAIL_PASSWORD"]:
-            # Only update password if provided (don't overwrite with empty)
-            admin_user.email_password = data["EMAIL_PASSWORD"]
-        if "GEMINI_API_KEY" in data:
-            admin_user.gemini_api_key = data["GEMINI_API_KEY"]
+        # Global Settings (Admin only)
+        if is_admin:
+            admin_user = db.query(User).filter(User.is_admin == True).first()
+            if not admin_user:
+                raise Exception("No admin user found to save settings to")
+                
+            if "EMAIL_ADDRESS" in data:
+                admin_user.email = data["EMAIL_ADDRESS"]
+            if "EMAIL_PASSWORD" in data and data["EMAIL_PASSWORD"]:
+                admin_user.email_password = data["EMAIL_PASSWORD"]
+            if "GEMINI_API_KEY" in data:
+                admin_user.gemini_api_key = data["GEMINI_API_KEY"]
+
+        # User-specific Settings (All Users)
         if "TELEGRAM_BOT_TOKEN" in data:
-            admin_user.telegram_bot_token = data["TELEGRAM_BOT_TOKEN"]
+            current_user.telegram_bot_token = data["TELEGRAM_BOT_TOKEN"]
         if "TELEGRAM_CHAT_ID" in data:
-            admin_user.telegram_chat_id = data["TELEGRAM_CHAT_ID"]
+            current_user.telegram_chat_id = data["TELEGRAM_CHAT_ID"]
             
         db.commit()
-        logger.info(f"✅ Updated settings in database: {list(data.keys())}")
+        logger.info(f"✅ Updated settings in database: {list(data.keys())} by user {current_user.username}")
         
         # If Telegram bot token was updated, re-register the webhook
         if "TELEGRAM_BOT_TOKEN" in data and data["TELEGRAM_BOT_TOKEN"]:
@@ -174,7 +180,7 @@ async def test_telegram(
     request: Request,
     db: Session = Depends(get_db)
 ):
-    """Send test Telegram message using provided credentials (admins only)"""
+    """Send test Telegram message using provided credentials"""
     from app.core.security import get_token_from_request, decode_token
     import httpx
     

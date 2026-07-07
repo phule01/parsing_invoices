@@ -4,10 +4,11 @@
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     username VARCHAR(50) UNIQUE NOT NULL,
-    email VARCHAR(100) UNIQUE NOT NULL,
+    email VARCHAR(100) UNIQUE,
     hashed_password VARCHAR(255) NOT NULL,
-    is_active BOOLEAN DEFAULT True,
+    is_active BOOLEAN DEFAULT False,
     is_admin BOOLEAN DEFAULT False,
+    telegram_auth_msg_id VARCHAR(50),
     -- Credentials for email and integrations (only used by admin)
     email_password VARCHAR(255),
     gemini_api_key VARCHAR(500),
@@ -117,6 +118,17 @@ CREATE TABLE IF NOT EXISTS invoice_items (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Invoice Notifications table
+CREATE TABLE IF NOT EXISTS invoice_notifications (
+    id SERIAL PRIMARY KEY,
+    invoice_id INT NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+    user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    bot_token VARCHAR(500) NOT NULL,
+    chat_id VARCHAR(100) NOT NULL,
+    message_id VARCHAR(100) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Email Logs table
 CREATE TABLE IF NOT EXISTS email_logs (
     id SERIAL PRIMARY KEY,
@@ -183,23 +195,4 @@ CREATE INDEX idx_audit_logs_action ON audit_logs(action);
 CREATE INDEX idx_audit_logs_timestamp ON audit_logs(timestamp);
 CREATE INDEX idx_audit_logs_resource ON audit_logs(resource, resource_id);
 
--- Insert default users for 2-user access control system
-INSERT INTO users (username, email, hashed_password, is_active, created_at, updated_at)
-VALUES (
-    'admin',
-    'admin@local.dev',
-    '$2b$12$fGeeOUzkz.RlOT1qooPuoOho.5ZN1Vpzq1J5AocHXhtIsAmYTE2py',
-    TRUE,
-    CURRENT_TIMESTAMP,
-    CURRENT_TIMESTAMP
-) ON CONFLICT (username) DO NOTHING;
 
-INSERT INTO users (username, email, hashed_password, is_active, created_at, updated_at)
-VALUES (
-    'user',
-    'user@local.dev',
-    '$2b$12$fGeeOUzkz.RlOT1qooPuoOho.5ZN1Vpzq1J5AocHXhtIsAmYTE2py',
-    TRUE,
-    CURRENT_TIMESTAMP,
-    CURRENT_TIMESTAMP
-) ON CONFLICT (username) DO NOTHING;

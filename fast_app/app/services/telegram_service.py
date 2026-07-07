@@ -111,6 +111,33 @@ async def send_message_with_metadata(
 
     return {"ok": False, "message_id": None, "chat_id": str(target) if target else None}
 
+async def send_message_to_user(
+    text: str,
+    bot_token: str,
+    chat_id: str,
+    reply_markup: Optional[dict] = None,
+) -> dict:
+    """Send a message to a specific user using their bot token."""
+    payload: dict = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
+    if reply_markup:
+        payload["reply_markup"] = reply_markup
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(
+                f"{TELEGRAM_API_URL}/bot{bot_token}/sendMessage",
+                json=payload,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            if data.get("ok"):
+                msg_id = data.get("result", {}).get("message_id")
+                return {"ok": True, "message_id": msg_id, "chat_id": chat_id}
+    except Exception as exc:
+        logger.error("❌ Error sending Telegram message to specific user: %s", exc)
+
+    return {"ok": False, "message_id": None, "chat_id": chat_id}
+
 
 async def send_photo_with_metadata(
     photo_path: str,
@@ -164,9 +191,11 @@ async def edit_message(
     message_id: int,
     text: str,
     reply_markup: Optional[dict] = None,
+    bot_token: Optional[str] = None,
 ) -> bool:
     """Edit an existing Telegram message (e.g. to remove inline buttons after action)."""
-    bot_token, _ = get_telegram_config()
+    if not bot_token:
+        bot_token, _ = get_telegram_config()
     if not bot_token:
         return False
     payload: dict = {
@@ -206,6 +235,36 @@ async def broadcast_to_web_ui(notification: dict) -> None:
     except Exception as exc:
         logger.error("❌ WebSocket broadcast error: %s", exc)
 
+
+async def sync_invoice_notifications(invoice_id: int, response_text: str):
+    """
+    Finds all Telegram notifications sent for this invoice_id and edits them
+    to remove buttons and show the updated response text.
+    """
+    from database import SessionLocal
+    from models import InvoiceNotification
+    import asyncio
+
+    try:
+        with SessionLocal() as db:
+            notifications = db.query(InvoiceNotification).filter(InvoiceNotification.invoice_id == invoice_id).all()
+            
+            tasks = []
+            for notif in notifications:
+                if notif.chat_id and notif.message_id and notif.bot_token:
+                    tasks.append(edit_message(
+                        chat_id=str(notif.chat_id),
+                        message_id=int(notif.message_id),
+                        text=response_text,
+                        reply_markup={"inline_keyboard": []},
+                        bot_token=notif.bot_token,
+                    ))
+            
+            if tasks:
+                await asyncio.gather(*tasks)
+                logger.info(f"✅ Synced {len(tasks)} Telegram notifications for invoice {invoice_id}")
+    except Exception as e:
+        logger.error(f"❌ Error syncing invoice notifications: {e}")
 
 # ── Invoice notifications ─────────────────────────────────────────────────────
 
@@ -249,7 +308,42 @@ async def send_invoice_approval_request(
         ]]
     }
 
-    result = await send_message_with_metadata(message, reply_markup=reply_markup)
+    # Broadcast to all users with telegram configured
+    from database import SessionLocal
+    from models import User, InvoiceNotification
+
+    at_least_one_success = False
+    try:
+        with SessionLocal() as db:
+            users = db.query(User).filter(
+                User.is_active == True,
+                User.telegram_bot_token.isnot(None),
+                User.telegram_bot_token != "",
+                User.telegram_chat_id.isnot(None),
+                User.telegram_chat_id != ""
+            ).all()
+
+            for u in users:
+                res = await send_message_to_user(
+                    message, 
+                    bot_token=u.telegram_bot_token, 
+                    chat_id=u.telegram_chat_id, 
+                    reply_markup=reply_markup
+                )
+                if res["ok"]:
+                    notif = InvoiceNotification(
+                        invoice_id=invoice_id,
+                        user_id=u.id,
+                        bot_token=u.telegram_bot_token,
+                        chat_id=u.telegram_chat_id,
+                        message_id=str(res["message_id"])
+                    )
+                    db.add(notif)
+                    at_least_one_success = True
+            
+            db.commit()
+    except Exception as e:
+        logger.error(f"Error broadcasting invoice approval request: {e}")
 
     await broadcast_to_web_ui({
         "type": "invoice_received",
@@ -262,7 +356,7 @@ async def send_invoice_approval_request(
         "severity": "warning",
     })
 
-    return result["ok"]
+    return at_least_one_success
 
 
 async def send_invoice_status(
@@ -292,7 +386,22 @@ async def send_invoice_status(
     if note:
         message += f"\n<b>Ghi chú:</b> {note}"
 
-    sent = await send_message(message)
+    # Broadcast status to all configured users
+    from database import SessionLocal
+    from models import User
+    try:
+        with SessionLocal() as db:
+            users = db.query(User).filter(
+                User.is_active == True,
+                User.telegram_bot_token.isnot(None),
+                User.telegram_bot_token != "",
+                User.telegram_chat_id.isnot(None),
+                User.telegram_chat_id != ""
+            ).all()
+            for u in users:
+                await send_message_to_user(message, u.telegram_bot_token, u.telegram_chat_id)
+    except Exception as e:
+        logger.error(f"Error broadcasting invoice status: {e}")
     await broadcast_to_web_ui({
         "type": notif_type,
         "title": title,

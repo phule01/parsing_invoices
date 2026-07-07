@@ -106,6 +106,193 @@ async def register(
     return new_user
 
 
+@router.post("/public-register", response_model=UserResponse)
+async def public_register(
+    user_data: UserRegister, 
+    db: Session = Depends(get_db)
+):
+    """
+    Register a new standard user from the public web UI.
+    User is created as inactive and requires admin approval.
+    """
+    if db.query(User).filter(User.username == user_data.username).first():
+        raise HTTPException(status_code=400, detail="Username already registered")
+
+    new_user = User(
+        username=user_data.username,
+        email=getattr(user_data, "email", None),
+        hashed_password=hash_password(user_data.password),
+        is_active=False,  # Needs approval
+        is_admin=False,
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    log_audit(db, user_id=new_user.id, action="PUBLIC_REGISTER",
+              details=f"User {user_data.username} registered via web UI and is awaiting approval.")
+
+    # Trigger Telegram notification for approval
+    import os
+    import httpx
+    import asyncio
+    from app.services.telegram_service import TELEGRAM_API_URL
+    
+    admin_user = db.query(User).filter(User.is_admin == True).first()
+    if admin_user:
+        bot_token = admin_user.telegram_bot_token or os.getenv("TELEGRAM_BOT_TOKEN")
+        chat_id = admin_user.telegram_chat_id or os.getenv("TELEGRAM_CHAT_ID")
+        if bot_token and chat_id:
+            async def _notify_admin():
+                keyboard = {
+                    "inline_keyboard": [
+                        [
+                            {"text": "✅ Approve", "callback_data": f"approve_user_{new_user.id}"},
+                            {"text": "❌ Reject", "callback_data": f"reject_user_{new_user.id}"}
+                        ]
+                    ]
+                }
+                msg_text = (
+                    f"👤 <b>New User Registration</b>\n\n"
+                    f"Username: <b>{new_user.username}</b>\n\n"
+                    f"<i>Please approve or reject this user access request.</i>"
+                )
+                try:
+                    async with httpx.AsyncClient(timeout=10) as client:
+                        resp = await client.post(
+                            f"{TELEGRAM_API_URL}/bot{bot_token}/sendMessage",
+                            json={
+                                "chat_id": chat_id,
+                                "text": msg_text,
+                                "parse_mode": "HTML",
+                                "reply_markup": keyboard,
+                            },
+                        )
+                        data = resp.json()
+                        if data.get("ok"):
+                            msg_id = data["result"]["message_id"]
+                            from database import SessionLocal
+                            with SessionLocal() as local_db:
+                                u = local_db.query(User).filter(User.id == new_user.id).first()
+                                if u:
+                                    u.telegram_auth_msg_id = str(msg_id)
+                                    local_db.commit()
+                except Exception as e:
+                    pass
+            asyncio.create_task(_notify_admin())
+
+    return new_user
+
+
+@router.get("/admin/pending-users")
+async def get_pending_users(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get all users waiting for approval."""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Only admins can view pending users")
+        
+    pending = db.query(User).filter(User.is_active == False, User.is_admin == False).all()
+    return [{"id": u.id, "username": u.username, "created_at": u.created_at} for u in pending]
+
+
+@router.post("/admin/approve-user/{user_id}")
+async def approve_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Approve a pending user via Web UI."""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Only admins can approve users")
+        
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    user.is_active = True
+    db.commit()
+    
+    log_audit(db, user_id=current_user.id, action="APPROVE_USER",
+              details=f"Admin {current_user.username} approved user {user.username} via Web UI")
+              
+    # Sync with Telegram
+    if user.telegram_auth_msg_id:
+        import os, httpx, asyncio
+        from app.services.telegram_service import TELEGRAM_API_URL
+        bot_token = current_user.telegram_bot_token or os.getenv("TELEGRAM_BOT_TOKEN")
+        chat_id = current_user.telegram_chat_id or os.getenv("TELEGRAM_CHAT_ID")
+        if bot_token and chat_id:
+            async def _edit_tg():
+                try:
+                    async with httpx.AsyncClient(timeout=10) as client:
+                        await client.post(
+                            f"{TELEGRAM_API_URL}/bot{bot_token}/editMessageText",
+                            json={
+                                "chat_id": chat_id,
+                                "message_id": int(user.telegram_auth_msg_id),
+                                "text": f"✅ <b>User {user.username} Approved</b>\n(Approved via Web UI by {current_user.username})",
+                                "parse_mode": "HTML",
+                                "reply_markup": {"inline_keyboard": []},
+                            },
+                        )
+                except Exception:
+                    pass
+            asyncio.create_task(_edit_tg())
+
+    return {"status": "ok", "message": f"User {user.username} approved"}
+
+
+@router.post("/admin/reject-user/{user_id}")
+async def reject_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Reject and delete a pending user via Web UI."""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Only admins can reject users")
+        
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    username = user.username
+    msg_id = user.telegram_auth_msg_id
+    db.delete(user)
+    db.commit()
+    
+    log_audit(db, user_id=current_user.id, action="REJECT_USER",
+              details=f"Admin {current_user.username} rejected user {username} via Web UI")
+              
+    # Sync with Telegram
+    if msg_id:
+        import os, httpx, asyncio
+        from app.services.telegram_service import TELEGRAM_API_URL
+        bot_token = current_user.telegram_bot_token or os.getenv("TELEGRAM_BOT_TOKEN")
+        chat_id = current_user.telegram_chat_id or os.getenv("TELEGRAM_CHAT_ID")
+        if bot_token and chat_id:
+            async def _edit_tg():
+                try:
+                    async with httpx.AsyncClient(timeout=10) as client:
+                        await client.post(
+                            f"{TELEGRAM_API_URL}/bot{bot_token}/editMessageText",
+                            json={
+                                "chat_id": chat_id,
+                                "message_id": int(msg_id),
+                                "text": f"❌ <b>User {username} Rejected</b>\n(Rejected via Web UI by {current_user.username})",
+                                "parse_mode": "HTML",
+                                "reply_markup": {"inline_keyboard": []},
+                            },
+                        )
+                except Exception:
+                    pass
+            asyncio.create_task(_edit_tg())
+
+    return {"status": "ok", "message": f"User {username} rejected"}
+
+
 # ── Admin Setup ───────────────────────────────────────────────────────────────
 
 @router.get("/has-admin")

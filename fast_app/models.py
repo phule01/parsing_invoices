@@ -11,8 +11,9 @@ class User(Base):
     username = Column(String(50), unique=True, nullable=False, index=True)
     email = Column(String(100), unique=True, nullable=True, index=True)
     hashed_password = Column(String(255), nullable=False)
-    is_active = Column(Boolean, default=True)
+    is_active = Column(Boolean, default=False)
     is_admin = Column(Boolean, default=False)
+    telegram_auth_msg_id = Column(String(50), nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
@@ -114,6 +115,22 @@ class Invoice(Base):
     user = relationship("User", back_populates="invoices")
     items = relationship("InvoiceItem", back_populates="invoice", cascade="all, delete-orphan")
     signature_records = relationship("Signature", back_populates="invoice", cascade="all, delete-orphan", overlaps="signatures")
+    notifications = relationship("InvoiceNotification", back_populates="invoice", cascade="all, delete-orphan")
+
+class InvoiceNotification(Base):
+    """Tracks Telegram notifications sent to users for an invoice."""
+    __tablename__ = "invoice_notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    invoice_id = Column(Integer, ForeignKey("invoices.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    bot_token = Column(String(500), nullable=False)
+    chat_id = Column(String(100), nullable=False)
+    message_id = Column(String(100), nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+
+    invoice = relationship("Invoice", back_populates="notifications")
+    user = relationship("User")
 
 class InvoiceItem(Base):
     __tablename__ = "invoice_items"

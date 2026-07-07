@@ -18,11 +18,11 @@ class AdminRegister(BaseModel):
     """Admin setup/registration request with all credentials."""
     username: str
     password: str
-    email_address: str  # Email to send invoices from
-    email_password: str  # Gmail App Password
-    gemini_api_key: str
     telegram_bot_token: str
     telegram_chat_id: str
+    email_address: Optional[str] = None
+    email_password: Optional[str] = None
+    gemini_api_key: Optional[str] = None
 
 class TokenResponse(BaseModel):
     """Token response."""

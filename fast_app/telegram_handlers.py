@@ -149,27 +149,27 @@ async def handle_invoice_callback(
             note="Inventory updated" if action == "approve" else "",
         )
 
-    # ── Edit the original Telegram message to remove buttons ──────────────────
-    admin = db.query(User).filter(User.is_admin == True).first()
-    bot_token = admin.telegram_bot_token if admin else os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
-    if not bot_token:
-        return {"status": "error", "msg": "TELEGRAM_BOT_TOKEN not configured"}
+    # ── Edit all related Telegram notifications to remove buttons ──────────────────
+    from app.services.telegram_service import sync_invoice_notifications
+    import asyncio
+    
+    asyncio.create_task(sync_invoice_notifications(invoice_id, response_text))
 
-    async with httpx.AsyncClient(timeout=10) as client:
-        await client.post(
-            f"{TELEGRAM_API_URL}/bot{bot_token}/editMessageText",
-            json={
-                "chat_id": chat_id,
-                "message_id": message_id,
-                "text": response_text,
-                "parse_mode": "HTML",
-                "reply_markup": {"inline_keyboard": []},
-            },
-        )
-        await client.post(
-            f"{TELEGRAM_API_URL}/bot{bot_token}/answerCallbackQuery",
-            json={"callback_query_id": callback_id},
-        )
+    # Still need to answer the callback query for the user who clicked it
+    # We can use the current bot_token for this user
+    from models import InvoiceNotification
+    notif = db.query(InvoiceNotification).filter(
+        InvoiceNotification.invoice_id == invoice_id,
+        InvoiceNotification.chat_id == str(chat_id)
+    ).first()
+    
+    bot_token = notif.bot_token if notif else os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+    if bot_token:
+        async with httpx.AsyncClient(timeout=10) as client:
+            await client.post(
+                f"{TELEGRAM_API_URL}/bot{bot_token}/answerCallbackQuery",
+                json={"callback_query_id": callback_id},
+            )
 
     logger.info("Telegram callback handled — invoice %s %sd", invoice_id, action)
     return {"status": "ok"}
@@ -222,28 +222,17 @@ async def process_invoice_action_from_web(
         note="Inventory updated" if action == "approve" else "",
     )
 
-    # Edit the original Telegram approval message if we stored its ID
-    telegram_info = {}
-    if isinstance(result.invoice.signatures, dict):
-        telegram_info = result.invoice.signatures.get("telegram", {})
-
-    tg_chat_id = telegram_info.get("chat_id")
-    tg_message_id = telegram_info.get("message_id")
+    # Edit all Telegram approval messages
+    from app.services.telegram_service import sync_invoice_notifications
+    import asyncio
+    
     response_text = (
         f"✅ <b>Approved</b> invoice {result.invoice.invoice_number}.\n\nInventory updated."
         if action == "approve"
         else f"❌ <b>Rejected</b> invoice {result.invoice.invoice_number}."
     )
-
-    if tg_chat_id and tg_message_id:
-        await edit_message(
-            chat_id=str(tg_chat_id),
-            message_id=int(tg_message_id),
-            text=response_text,
-            reply_markup={"inline_keyboard": []},
-        )
-    else:
-        await send_message(response_text)
+    
+    asyncio.create_task(sync_invoice_notifications(invoice_id, response_text))
 
     return {
         "status": "ok",
@@ -427,6 +416,63 @@ async def _add_account_flow(text: str, chat_id: int, db: Session) -> dict:
         return {"status": "ok", "user_id": new_user.id}
 
     return {"status": "error"}
+
+async def handle_user_approval_callback(
+    callback_data: str,
+    callback_id: str,
+    chat_id: int,
+    message_id: int,
+    db: Session,
+) -> dict:
+    """
+    Process an approve/reject user registration button press from Telegram.
+    """
+    parts = callback_data.split("_")
+    if len(parts) < 3:
+        return {"status": "error", "msg": "Invalid callback data format"}
+
+    action = parts[0]   # "approve" or "reject"
+    try:
+        user_id = int(parts[2])
+    except ValueError:
+        return {"status": "error", "msg": "Invalid user ID"}
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        return {"status": "error", "msg": "User not found"}
+
+    bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+    
+    if action == "approve":
+        user.is_active = True
+        db.commit()
+        text_update = f"✅ <b>User {user.username} Approved</b>\n(Approved via Telegram)"
+    elif action == "reject":
+        username = user.username
+        db.delete(user)
+        db.commit()
+        text_update = f"❌ <b>User {username} Rejected</b>\n(Rejected via Telegram)"
+    else:
+        return {"status": "error", "msg": "Unknown action"}
+
+    if bot_token:
+        async with httpx.AsyncClient(timeout=10) as client:
+            await client.post(
+                f"{TELEGRAM_API_URL}/bot{bot_token}/editMessageText",
+                json={
+                    "chat_id": chat_id,
+                    "message_id": message_id,
+                    "text": text_update,
+                    "parse_mode": "HTML",
+                    "reply_markup": {"inline_keyboard": []},
+                },
+            )
+            await client.post(
+                f"{TELEGRAM_API_URL}/bot{bot_token}/answerCallbackQuery",
+                json={"callback_query_id": callback_id},
+            )
+
+    return {"status": "ok"}
 
 
 async def handle_role_callback(

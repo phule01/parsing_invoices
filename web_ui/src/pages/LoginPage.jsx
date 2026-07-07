@@ -14,16 +14,19 @@ function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
 
-  // Admin Setup Form
   const [adminForm, setAdminForm] = useState({
     username: '',
     password: '',
-    email_address: '',
-    email_password: '',
-    gemini_api_key: '',
     telegram_bot_token: '',
     telegram_chat_id: '',
   });
+
+  // User Register Form
+  const [registerForm, setRegisterForm] = useState({
+    username: '',
+    password: '',
+  });
+  const [successMessage, setSuccessMessage] = useState('');
 
   // Check if admin exists
   useEffect(() => {
@@ -71,15 +74,9 @@ function LoginPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           username: adminForm.username,
-          email: adminForm.email,
           password: adminForm.password,
-          email_address: adminForm.email_address,
-          email_password: adminForm.email_password,
-          gemini_api_key: adminForm.gemini_api_key,
           telegram_bot_token: adminForm.telegram_bot_token,
           telegram_chat_id: adminForm.telegram_chat_id,
-          imap_server: adminForm.imap_server,
-          smtp_server: adminForm.smtp_server,
         }),
       });
 
@@ -99,6 +96,39 @@ function LoginPage() {
     }
   };
 
+  // Handle user registration
+  const handleRegister = async (e) => {
+    e.preventDefault();
+    setLocalError('');
+    setSuccessMessage('');
+
+    if (!registerForm.username || !registerForm.password) {
+      setLocalError('Username and password are required');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE}/api/auth/public-register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: registerForm.username,
+          password: registerForm.password,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.detail || 'Registration failed');
+      }
+      
+      setSuccessMessage('Your account has been created. Please wait for the Admin to approve your access before logging in.');
+      setRegisterForm({ username: '', password: '' });
+    } catch (err) {
+      setLocalError(err.message || 'Registration failed. Please try again.');
+    }
+  };
+
   // Handle admin form changes
   const handleAdminFormChange = (e) => {
     const { name, value } = e.target;
@@ -114,18 +144,29 @@ function LoginPage() {
 
           {/* Tabs */}
           <div className="login-tabs">
-            <button
-              className={`tab-button ${activeTab === 'user' ? 'active' : ''}`}
-              onClick={() => setActiveTab('user')}
-            >
-              👤 User Login
-            </button>
-            <button
-              className={`tab-button ${activeTab === 'admin' ? 'active' : ''}`}
-              onClick={() => setActiveTab('admin')}
-            >
-              🔧 Admin Setup
-            </button>
+            {adminExists ? (
+              <>
+                <button
+                  className={`tab-button ${activeTab === 'user' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('user')}
+                >
+                  👤 Login
+                </button>
+                <button
+                  className={`tab-button ${activeTab === 'register' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('register')}
+                >
+                  📝 Create Account
+                </button>
+              </>
+            ) : (
+              <button
+                className={`tab-button ${activeTab === 'admin' ? 'active' : ''}`}
+                onClick={() => setActiveTab('admin')}
+              >
+                🔧 Admin Setup
+              </button>
+            )}
           </div>
 
           {/* User Login Tab */}
@@ -162,6 +203,50 @@ function LoginPage() {
 
               <button type="submit" disabled={loading} className="login-button">
                 {loading ? 'Logging in...' : 'Login'}
+              </button>
+            </form>
+          )}
+
+          {/* Register Tab */}
+          {activeTab === 'register' && (
+            <form onSubmit={handleRegister}>
+              <div className="form-group">
+                <label htmlFor="reg_username">Username</label>
+                <input
+                  id="reg_username"
+                  type="text"
+                  value={registerForm.username}
+                  onChange={(e) => setRegisterForm({ ...registerForm, username: e.target.value })}
+                  placeholder="Choose a username"
+                  disabled={loading}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="reg_password">Password</label>
+                <input
+                  id="reg_password"
+                  type="password"
+                  value={registerForm.password}
+                  onChange={(e) => setRegisterForm({ ...registerForm, password: e.target.value })}
+                  placeholder="Create a strong password"
+                  disabled={loading}
+                  required
+                />
+              </div>
+
+              {(error || localError) && (
+                <div className="error-message">{error || localError}</div>
+              )}
+              {successMessage && (
+                <div className="success-message" style={{ color: 'green', marginBottom: '15px' }}>
+                  {successMessage}
+                </div>
+              )}
+
+              <button type="submit" disabled={loading} className="login-button">
+                {loading ? 'Creating Account...' : 'Create Account'}
               </button>
             </form>
           )}
@@ -204,65 +289,6 @@ function LoginPage() {
                     disabled={loading}
                     required
                   />
-                </div>
-              </fieldset>
-
-              {/* Email Configuration Section */}
-              <fieldset className="form-section">
-                <legend>Email Configuration</legend>
-
-                <div className="form-group">
-                  <label htmlFor="email_address">Email Address (Gmail)</label>
-                  <input
-                    id="email_address"
-                    type="email"
-                    name="email_address"
-                    value={adminForm.email_address}
-                    onChange={handleAdminFormChange}
-                    placeholder="your.email@gmail.com"
-                    disabled={loading}
-                    required
-                  />
-                  <small>The Gmail address to send invoices from</small>
-                </div>
-
-                <div className="form-group">
-                  <label htmlFor="email_password">Gmail App Password</label>
-                  <input
-                    id="email_password"
-                    type="password"
-                    name="email_password"
-                    value={adminForm.email_password}
-                    onChange={handleAdminFormChange}
-                    placeholder="16-character app password"
-                    disabled={loading}
-                    required
-                  />
-                  <small>
-                    ⚠️ Use <a href="https://support.google.com/accounts/answer/185833" target="_blank" rel="noopener noreferrer">Gmail App Password</a>, not your regular password. Enable 2FA first.
-                  </small>
-                </div>
-              </fieldset>
-
-              {/* AI Parser Configuration Section */}
-              <fieldset className="form-section">
-                <legend>AI Parser (Invoice Extraction)</legend>
-
-                <div className="form-group">
-                  <label htmlFor="gemini_api_key">Google Gemini API Key</label>
-                  <input
-                    id="gemini_api_key"
-                    type="password"
-                    name="gemini_api_key"
-                    value={adminForm.gemini_api_key}
-                    onChange={handleAdminFormChange}
-                    placeholder="Your API key"
-                    disabled={loading}
-                    required
-                  />
-                  <small>
-                    Get it from <a href="https://ai.google.dev" target="_blank" rel="noopener noreferrer">Google AI Studio</a>
-                  </small>
                 </div>
               </fieldset>
 

@@ -16,6 +16,10 @@ function SettingsModule() {
   const [userLoading, setUserLoading] = useState(false);
   const [userSuccess, setUserSuccess] = useState('');
   const [userError, setUserError] = useState('');
+  
+  // Pending Approvals State
+  const [pendingUsers, setPendingUsers] = useState([]);
+  const [approvalLoading, setApprovalLoading] = useState(false);
 
   const [settings, setSettings] = useState({
     EMAIL_ADDRESS: '',
@@ -40,10 +44,27 @@ function SettingsModule() {
       }
     };
 
+    const fetchPendingUsers = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/auth/admin/pending-users`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setPendingUsers(data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch pending users:", err);
+      }
+    };
+
     if (token) {
       fetchSettings();
+      if (user?.is_admin) {
+        fetchPendingUsers();
+      }
     }
-  }, [token]);
+  }, [token, user]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -189,40 +210,58 @@ function SettingsModule() {
     }
   };
 
-  if (!user?.is_admin) {
+  const handleApproveUser = async (userId) => {
+    setApprovalLoading(true);
+    setUserError('');
+    setUserSuccess('');
+    try {
+      const response = await fetch(`${API_BASE}/api/auth/admin/approve-user/${userId}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!response.ok) throw new Error('Failed to approve user');
+      setUserSuccess('User approved successfully!');
+      setPendingUsers(pendingUsers.filter(u => u.id !== userId));
+      setTimeout(() => setUserSuccess(''), 5000);
+    } catch (err) {
+      setUserError(err.message);
+    } finally {
+      setApprovalLoading(false);
+    }
+  };
+
+  const handleRejectUser = async (userId) => {
+    if (!window.confirm("Are you sure you want to reject this user? Their request will be deleted.")) return;
+    setApprovalLoading(true);
+    setUserError('');
+    setUserSuccess('');
+    try {
+      const response = await fetch(`${API_BASE}/api/auth/admin/reject-user/${userId}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!response.ok) throw new Error('Failed to reject user');
+      setUserSuccess('User rejected and removed.');
+      setPendingUsers(pendingUsers.filter(u => u.id !== userId));
+      setTimeout(() => setUserSuccess(''), 5000);
+    } catch (err) {
+      setUserError(err.message);
+    } finally {
+      setApprovalLoading(false);
+    }
+  };
+
+  const AdminSection = () => {
+    if (!user?.is_admin) return null;
     return (
-      <div className="settings-module">
-        <h2>ℹ️ System Information</h2>
-        <p>👤 Standard users have read-only access to basic system info.</p>
+      <>
+        <hr style={{margin: '40px 0', border: '1px solid #eee'}} />
+        <h2>⚙️ Global System Settings</h2>
+        <p className="admin-only">👤 Admin only - Configure system integrations</p>
 
-        <div className="settings-info">
-          <h3>System Email Configuration</h3>
-          <p>
-            <strong>Email Address:</strong> {settings.EMAIL_ADDRESS || 'Not configured'}
-          </p>
-        </div>
-        
-        <div className="settings-info" style={{marginTop: '20px'}}>
-          <h3>⚠️ Access Restricted</h3>
-          <p>System settings (API keys, bot tokens, app passwords) and User Management can only be modified by administrators. Please contact an admin if you need these details updated.</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="settings-module">
-      <h2>⚙️ Change Setting</h2>
-      <p className="admin-only">👤 Admin only - Configure system integrations</p>
-
-      {error && <div className="error-message">{error}</div>}
-      {success && <div className="success-message">{success}</div>}
-
-      <form onSubmit={handleSubmit} className="settings-form">
         {/* Email Configuration */}
         <fieldset className="settings-section">
           <legend>📧 Email Configuration (Gmail)</legend>
-
           <div className="form-group">
             <label htmlFor="EMAIL_ADDRESS">Sender Email Address</label>
             <input
@@ -235,7 +274,6 @@ function SettingsModule() {
             />
             <small>Email to send invoices from</small>
           </div>
-
           <div className="form-group">
             <label htmlFor="EMAIL_PASSWORD">Email App Password</label>
             <input
@@ -252,7 +290,6 @@ function SettingsModule() {
         {/* AI Configuration */}
         <fieldset className="settings-section">
           <legend>🤖 AI Parser Configuration (Google Gemini)</legend>
-
           <div className="form-group">
             <label htmlFor="GEMINI_API_KEY">Gemini API Key</label>
             <input
@@ -271,6 +308,51 @@ function SettingsModule() {
             </small>
           </div>
         </fieldset>
+      </>
+    );
+  };
+
+  return (
+    <div className="settings-module">
+      <h2>⚙️ Settings & Integrations</h2>
+      <p>Configure your personal and system integrations here.</p>
+
+      {error && <div className="error-message">{error}</div>}
+      {success && <div className="success-message">{success}</div>}
+
+      <form onSubmit={handleSubmit} className="settings-form">
+        
+        {/* Personal Telegram Configuration (All Users) */}
+        <fieldset className="settings-section">
+          <legend>📱 Personal Telegram Bot (Approval Notifications)</legend>
+
+          <div className="form-group">
+            <label htmlFor="TELEGRAM_BOT_TOKEN">Telegram Bot Token</label>
+            <input
+              id="TELEGRAM_BOT_TOKEN"
+              type="password"
+              name="TELEGRAM_BOT_TOKEN"
+              value={settings.TELEGRAM_BOT_TOKEN}
+              onChange={handleChange}
+              placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="TELEGRAM_CHAT_ID">Telegram Chat ID</label>
+            <input
+              id="TELEGRAM_CHAT_ID"
+              type="text"
+              name="TELEGRAM_CHAT_ID"
+              value={settings.TELEGRAM_CHAT_ID}
+              onChange={handleChange}
+              placeholder="123456789"
+            />
+            <small>Your personal Chat ID to receive approval requests.</small>
+          </div>
+        </fieldset>
+
+        <AdminSection />
 
         {/* Submit Button */}
         <div className="form-actions">
@@ -283,56 +365,99 @@ function SettingsModule() {
       <div className="settings-info">
         <h3>ℹ️ Important Notes</h3>
         <ul>
-          <li>✅ All settings are saved to the server's environment</li>
-          <li>🔒 Passwords are stored securely in the .env file</li>
-          <li>🔄 Changes take effect immediately</li>
-          <li>📋 Only admin users can modify these settings</li>
+          <li>✅ Telegram settings are personal to your account.</li>
+          {user?.is_admin && <li>📋 Global settings (Email, API) affect the entire system and can only be modified by admins.</li>}
         </ul>
       </div>
 
-      <hr style={{margin: '40px 0', border: '1px solid #eee'}} />
+      {user?.is_admin && (
+        <>
+          <hr style={{margin: '40px 0', border: '1px solid #eee'}} />
 
-      <h2>👥 User Management</h2>
-      <p className="admin-only">👤 Admin only - Create standard user accounts</p>
+          <h2>👥 User Management</h2>
+          <p className="admin-only">👤 Admin only - Create standard user accounts</p>
 
-      {userError && <div className="error-message">{userError}</div>}
-      {userSuccess && <div className="success-message">{userSuccess}</div>}
+          {userError && <div className="error-message">{userError}</div>}
+          {userSuccess && <div className="success-message">{userSuccess}</div>}
 
-      <form onSubmit={handleCreateUser} className="settings-form">
-        <fieldset className="settings-section">
-          <legend>➕ Add New User</legend>
+          <form onSubmit={handleCreateUser} className="settings-form">
+            <fieldset className="settings-section">
+              <legend>➕ Add New User</legend>
 
-          <div className="form-group">
-            <label htmlFor="new_username">Username</label>
-            <input
-              id="new_username"
-              type="text"
-              value={newUser.username}
-              onChange={(e) => setNewUser({...newUser, username: e.target.value})}
-              placeholder="Username"
-              required
-            />
-          </div>
+              <div className="form-group">
+                <label htmlFor="new_username">Username</label>
+                <input
+                  id="new_username"
+                  type="text"
+                  value={newUser.username}
+                  onChange={(e) => setNewUser({...newUser, username: e.target.value})}
+                  placeholder="Username"
+                  required
+                />
+              </div>
 
-          <div className="form-group">
-            <label htmlFor="new_password">Password</label>
-            <input
-              id="new_password"
-              type="password"
-              value={newUser.password}
-              onChange={(e) => setNewUser({...newUser, password: e.target.value})}
-              placeholder="••••••••"
-              required
-            />
-          </div>
+              <div className="form-group">
+                <label htmlFor="new_password">Password</label>
+                <input
+                  id="new_password"
+                  type="password"
+                  value={newUser.password}
+                  onChange={(e) => setNewUser({...newUser, password: e.target.value})}
+                  placeholder="••••••••"
+                  required
+                />
+              </div>
 
-          <div className="form-actions">
-            <button type="submit" disabled={userLoading} className="btn-primary">
-              {userLoading ? '⏳ Creating...' : '➕ Create User'}
-            </button>
-          </div>
-        </fieldset>
-      </form>
+              <div className="form-actions">
+                <button type="submit" disabled={userLoading} className="btn-primary">
+                  {userLoading ? '⏳ Creating...' : '➕ Create User'}
+                </button>
+              </div>
+            </fieldset>
+          </form>
+
+          {/* Pending Approvals */}
+          <h3 style={{marginTop: '30px'}}>⏳ Pending Approvals</h3>
+          <p className="admin-only" style={{marginBottom: '15px'}}>Approve users who registered via the Web UI.</p>
+          
+          {pendingUsers.length === 0 ? (
+            <div className="info-message">No pending user registrations.</div>
+          ) : (
+            <div className="pending-users-list">
+              {pendingUsers.map(u => (
+                <div key={u.id} className="pending-user-card" style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  padding: '15px', border: '1px solid #ddd', borderRadius: '8px', marginBottom: '10px'
+                }}>
+                  <div>
+                    <strong>{u.username}</strong>
+                    <div style={{fontSize: '0.85em', color: '#666'}}>
+                      Requested: {new Date(u.created_at).toLocaleString()}
+                    </div>
+                  </div>
+                  <div style={{display: 'flex', gap: '10px'}}>
+                    <button 
+                      onClick={() => handleApproveUser(u.id)}
+                      disabled={approvalLoading}
+                      style={{padding: '6px 12px', background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer'}}
+                    >
+                      ✅ Approve
+                    </button>
+                    <button 
+                      onClick={() => handleRejectUser(u.id)}
+                      disabled={approvalLoading}
+                      style={{padding: '6px 12px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer'}}
+                    >
+                      ❌ Reject
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
     </div>
   );
 }
