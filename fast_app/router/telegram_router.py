@@ -10,8 +10,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/telegram", tags=["telegram"])
 
 
-@router.post("/webhook")
-async def telegram_webhook(request: Request, db: Session = Depends(get_db)):
+@router.post("/webhook/{token}")
+async def telegram_webhook(token: str, request: Request, db: Session = Depends(get_db)):
     """
     Telegram webhook endpoint.
     Handles callback queries (invoice approve/reject) and admin account commands.

@@ -12,8 +12,11 @@ import { useAuth } from '../../context/AuthContext';
  * - Inventory statistics summary
  * - Product audit history view
  */
-const InventoryDashboard = ({ apiBaseUrl = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === 'development' ? 'http://localhost:8000/api' : '/api') }) => {
-  const { token } = useAuth();
+const InventoryDashboard = ({ 
+  apiBaseUrl = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === 'development' ? 'http://localhost:8000/api' : '/api'),
+  adminTargetUser
+}) => {
+  const { token, user } = useAuth();
   const [inventory, setInventory] = useState([]);
   const [summary, setSummary] = useState(null);
   const [lowStockItems, setLowStockItems] = useState([]);
@@ -24,11 +27,15 @@ const InventoryDashboard = ({ apiBaseUrl = process.env.REACT_APP_API_URL || (pro
   const [refreshInterval, setRefreshInterval] = useState(5000); // Auto-refresh every 5 seconds
   const [showAuditModal, setShowAuditModal] = useState(false);
 
+  // Local user filter removed, now passed as prop `adminTargetUser`
+
   // Fetch current inventory
   const fetchInventory = useCallback(async () => {
     try {
       setError(null);
-      const response = await fetch(`${apiBaseUrl}/products/?limit=100`, {
+      let url = `${apiBaseUrl}/products/?limit=100`;
+      if (adminTargetUser?.id) url += `&target_user_id=${adminTargetUser.id}`;
+      const response = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (!response.ok) throw new Error('Failed to fetch inventory');
@@ -38,12 +45,14 @@ const InventoryDashboard = ({ apiBaseUrl = process.env.REACT_APP_API_URL || (pro
       setError(err.message);
       console.error('Error fetching inventory:', err);
     }
-  }, [apiBaseUrl, token]);
+  }, [apiBaseUrl, token, adminTargetUser]);
 
   // Fetch inventory summary
   const fetchSummary = useCallback(async () => {
     try {
-      const response = await fetch(`${apiBaseUrl}/products/`, {
+      let url = `${apiBaseUrl}/products/`;
+      if (adminTargetUser?.id) url += `?target_user_id=${adminTargetUser.id}`;
+      const response = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (!response.ok) throw new Error('Failed to fetch summary');
@@ -57,12 +66,14 @@ const InventoryDashboard = ({ apiBaseUrl = process.env.REACT_APP_API_URL || (pro
     } catch (err) {
       console.error('Error fetching summary:', err);
     }
-  }, [apiBaseUrl, token]);
+  }, [apiBaseUrl, token, adminTargetUser]);
 
   // Fetch low stock items
   const fetchLowStockItems = useCallback(async () => {
     try {
-      const response = await fetch(`${apiBaseUrl}/products/`, {
+      let url = `${apiBaseUrl}/products/`;
+      if (adminTargetUser?.id) url += `?target_user_id=${adminTargetUser.id}`;
+      const response = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (!response.ok) throw new Error('Failed to fetch low stock items');
@@ -73,7 +84,7 @@ const InventoryDashboard = ({ apiBaseUrl = process.env.REACT_APP_API_URL || (pro
     } catch (err) {
       console.error('Error fetching low stock items:', err);
     }
-  }, [apiBaseUrl, token]);
+  }, [apiBaseUrl, token, adminTargetUser]);
 
   // Fetch audit history for a product
   const fetchAuditHistory = useCallback(async (productId) => {
@@ -105,7 +116,7 @@ const InventoryDashboard = ({ apiBaseUrl = process.env.REACT_APP_API_URL || (pro
     }, refreshInterval);
 
     return () => clearInterval(interval);
-  }, [refreshInterval, fetchInventory, fetchSummary, fetchLowStockItems]);
+  }, [refreshInterval, fetchInventory, fetchSummary, fetchLowStockItems, adminTargetUser]);
 
   // Handle product selection to view audit history
   const handleViewAuditHistory = (product) => {

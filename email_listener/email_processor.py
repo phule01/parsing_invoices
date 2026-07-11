@@ -60,34 +60,22 @@ class APIClient:
 
     def __init__(self, base_url: str, username: str, password: str):
         self.base_url = base_url
-        self.username = username
-        self.password = password
+        self.internal_secret = os.getenv("SECRET_KEY", "your-secret-key-change-in-production-use-random-32-chars")
         self.token = None
 
     def _headers(self):
-        headers = {"Content-Type": "application/json"}
+        headers = {
+            "Content-Type": "application/json",
+            "X-Internal-Secret": self.internal_secret
+        }
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"
         return headers
 
     async def authenticate(self) -> bool:
-        """Get access token from API."""
-        try:
-            async with httpx.AsyncClient(timeout=10) as client:
-                resp = await client.post(
-                    f"{self.base_url}/api/auth/login",
-                    json={"username": self.username, "password": self.password},
-                )
-                if resp.status_code == 200:
-                    data = resp.json()
-                    self.token = data.get("access_token")
-                    logger.info(f"✅ Authentication successful")
-                    return True
-                logger.error(f"❌ Auth failed: {resp.status_code}")
-                return False
-        except Exception as e:
-            logger.error(f"Auth error: {e}")
-            return False
+        """Authentication is bypassed via X-Internal-Secret header for microservices."""
+        logger.info(f"✅ Using microservice authentication via X-Internal-Secret")
+        return True
     async def get_system_settings(self) -> dict:
         """Fetch system settings (email, token, etc) from the database."""
         try:
@@ -349,7 +337,9 @@ async def send_invoice_notification(invoice_data: dict) -> bool:
         "vat_amount": invoice_data.get("vat_amount", 0),
         "total_amount": invoice_data.get("total_amount", 0),
         "source_type": "email",
+        "raw_file_path": invoice_data.get("_file_path"),
         "items": invoice_data.get("items", []),
+        "user_id": invoice_data.get("_metadata", {}).get("user_id"),
     }
     
     created_invoice = await api.create_invoice(invoice_create_data)
@@ -499,7 +489,7 @@ def _check_and_store_file_hash(file_path: str) -> bool:
         logger.error(f"Error in file hashing: {e}")
         return False
 
-async def process_single_email(eid, message_id: str, sender: str, subject: str, msg, mail, api: APIClient):
+async def process_single_email(eid, message_id: str, sender: str, subject: str, msg, mail, api: APIClient, user_setting: dict):
     """
     Full processing pipeline for one email:
       1. Log the email to the backend
@@ -538,6 +528,8 @@ async def process_single_email(eid, message_id: str, sender: str, subject: str, 
                     "sender": sender,
                     "subject": subject,
                     "email_log_id": log_id,
+                    "gemini_api_key": user_setting.get("GEMINI_API_KEY"),
+                    "user_id": user_setting.get("user_id"),
                 },
             )
             logger.info(f"📥 Queued for parsing: {os.path.basename(file_path)}")
@@ -548,87 +540,88 @@ async def process_single_email(eid, message_id: str, sender: str, subject: str, 
     mail.store(eid, "+FLAGS", "\\Seen")
 
 
+async def process_user_mailbox(user_setting: dict, api: APIClient):
+    """Tiến trình quét email độc lập cho từng người dùng (Fault Isolation)."""
+    user_id = user_setting.get("user_id")
+    gemini_key = user_setting.get("GEMINI_API_KEY", "")
+    bot_token = user_setting.get("TELEGRAM_BOT_TOKEN", "")
+    chat_id = user_setting.get("TELEGRAM_CHAT_ID", "")
+    email_pass = user_setting.get("EMAIL_PASSWORD", "")
+    email_addr = user_setting.get("EMAIL_ADDRESS", "")
+    imap_server = user_setting.get("IMAP_SERVER", "imap.gmail.com")
+    imap_port = int(user_setting.get("IMAP_PORT", 993))
+    
+    if not gemini_key or not bot_token or not email_pass or not email_addr:
+        logger.warning(f"⏳ User {user_id} ({email_addr}) is missing Gemini API Key, Telegram Token, or Email Password. Skipping.")
+        return
+
+    mail = None
+    try:
+        # Connect to user's Gmail IMAP
+        mail = imaplib.IMAP4_SSL(imap_server, imap_port)
+        mail.login(email_addr, email_pass)
+        
+        folders_to_scan = ["INBOX", '"[Gmail]/Spam"', "Spam"]
+        
+        for folder in folders_to_scan:
+            try:
+                status, _ = mail.select(folder)
+                if status != "OK":
+                    continue
+                    
+                logger.info(f"📂 [User {user_id}] Quét thư mục: {folder}")
+                
+                # 2. Lấy danh sách ID đã xử lý
+                processed_ids = await api.get_processed_message_ids()
+                
+                # 3. Quét email và đẩy vào pipeline
+                emails = await fetch_unread_emails(mail, processed_ids)
+                if emails:
+                    logger.info(f"🔄 [User {user_id}] Processing {len(emails)} emails from {folder}...")
+                
+                for eid, message_id, sender, subject, msg in emails:
+                    try:
+                        logger.info(f"🔸 [User {user_id}] Starting to process email: {subject[:50]}")
+                        await process_single_email(eid, message_id, sender, subject, msg, mail, api, user_setting)
+                        logger.info(f"✅ [User {user_id}] Completed processing: {subject[:50]}")
+                    except Exception as e:
+                        logger.error(f"❌ [User {user_id}] Error in process_single_email: {e}", exc_info=True)
+            except Exception as e:
+                logger.warning(f"⚠️ [User {user_id}] Lỗi khi quét thư mục {folder}: {e}")
+            
+    except Exception as e:
+        logger.error(f"❌ [User {user_id}] Lỗi kết nối hoặc quét mail: {e}")
+    finally:
+        if mail:
+            try:
+                mail.logout()
+            except Exception:
+                pass
+
+
 async def main_loop(api: APIClient):
-    """Vòng lặp chính quản lý kết nối và quét email định kỳ."""
-    logger.info(f"🚀 Bắt đầu vòng lặp quét email (Chu kỳ: {SCAN_INTERVAL}s)")
+    """Vòng lặp chính quản lý kết nối và quét email định kỳ (Concurrent Execution)."""
+    logger.info(f"🚀 Bắt đầu vòng lặp quét email đa luồng (Chu kỳ: {SCAN_INTERVAL}s)")
     
     while True:
-        # 1. Fetch system settings from DB instead of .env
-        settings = await api.get_system_settings()
-        if not settings:
-            # If API fails or backend is restarting, sleep and retry
-            logger.warning("Failed to fetch system settings from API. Retrying in 10s...")
+        # 1. Fetch ALL users' system settings from DB
+        settings_list = await api.get_system_settings()
+        if not isinstance(settings_list, list):
+            logger.warning("Failed to fetch system settings or wrong format. Retrying in 10s...")
             await asyncio.sleep(10)
             continue
-        
-        # 2. Check for missing critical configuration
-        gemini_key = settings.get("GEMINI_API_KEY", "")
-        bot_token = settings.get("TELEGRAM_BOT_TOKEN", "")
-        chat_id = settings.get("TELEGRAM_CHAT_ID", "")
-        email_pass = settings.get("EMAIL_PASSWORD", "")
-        
-        if not gemini_key or not bot_token or not email_pass:
-            logger.warning("⏳ System not fully configured yet! Missing Gemini API Key, Telegram Token, or Email Password in Database. Pausing scan for 60s...")
+            
+        if not settings_list:
+            logger.warning("No active users with configured emails. Pausing scan for 60s...")
             await asyncio.sleep(60)
             continue
-            
-        # 3. Update global connection variables dynamically
-        global IMAP_SERVER, IMAP_PORT, EMAIL_ADDRESS, EMAIL_PASSWORD
-        IMAP_SERVER = settings.get("IMAP_SERVER", "imap.gmail.com")
-        IMAP_PORT = int(settings.get("IMAP_PORT", 993))
-        EMAIL_ADDRESS = settings.get("EMAIL_ADDRESS", "")
-        EMAIL_PASSWORD = email_pass
         
-        # Store API keys in environment for ai_parser to pick up dynamically
-        os.environ["GEMINI_API_KEY"] = gemini_key
-        os.environ["TELEGRAM_BOT_TOKEN"] = bot_token
-        os.environ["TELEGRAM_CHAT_ID"] = str(chat_id)
-
-        mail = None
-        try:
-            # 4. Kết nối tới Gmail IMAP
-            mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
-            mail.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
-            
-            folders_to_scan = ["INBOX", '"[Gmail]/Spam"', "Spam"]
-            
-            for folder in folders_to_scan:
-                try:
-                    status, _ = mail.select(folder)
-                    if status != "OK":
-                        continue
-                        
-                    logger.info(f"📂 Quét thư mục: {folder}")
-                    
-                    # 2. Lấy danh sách ID đã xử lý
-                    processed_ids = await api.get_processed_message_ids()
-                    
-                    # 3. Quét email và đẩy vào pipeline
-                    emails = await fetch_unread_emails(mail, processed_ids)
-                    if emails:
-                        logger.info(f"🔄 Processing {len(emails)} emails from {folder}...")
-                    
-                    for eid, message_id, sender, subject, msg in emails:
-                        try:
-                            logger.info(f"🔸 Starting to process email: {subject[:50]}")
-                            await process_single_email(eid, message_id, sender, subject, msg, mail, api)
-                            logger.info(f"✅ Completed processing: {subject[:50]}")
-                        except Exception as e:
-                            logger.error(f"❌ Error in process_single_email: {e}", exc_info=True)
-                except Exception as e:
-                    logger.warning(f"⚠️ Lỗi khi quét thư mục {folder}: {e}")
-                
-        except Exception as e:
-            logger.error(f"❌ Lỗi trong vòng lặp quét mail: {e}")
-            await asyncio.sleep(10)
-        finally:
-            if mail:
-                try:
-                    mail.logout()
-                except Exception:
-                    pass
+        # 2. Spawn concurrent tasks for each user
+        logger.info(f"👥 Spawning {len(settings_list)} concurrent mailbox tasks...")
+        tasks = [process_user_mailbox(user_setting, api) for user_setting in settings_list]
+        await asyncio.gather(*tasks, return_exceptions=True)
         
-        # 4. Chờ đến chu kỳ quét tiếp theo
+        # 3. Wait for the next scan interval
         await asyncio.sleep(SCAN_INTERVAL)
 
 
@@ -765,7 +758,8 @@ async def run_once(api: APIClient = None, search_criterion: str = "UNSEEN") -> d
             # Process all collected emails
             for eid, message_id, sender, subject, msg in results:
                 try:
-                    await process_single_email(eid, message_id, sender, subject, msg, mail, api)
+                    # In one-off run, we might need a default user setting or skip
+                    await process_single_email(eid, message_id, sender, subject, msg, mail, api, {"GEMINI_API_KEY": os.getenv("GEMINI_API_KEY"), "user_id": 1})
                 except Exception as e:
                     logger.error(f"Error in process_single_email: {e}")
 

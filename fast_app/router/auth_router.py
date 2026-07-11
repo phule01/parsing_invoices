@@ -196,6 +196,18 @@ async def get_pending_users(
     pending = db.query(User).filter(User.is_active == False, User.is_admin == False).all()
     return [{"id": u.id, "username": u.username, "created_at": u.created_at} for u in pending]
 
+@router.get("/admin/users")
+async def get_all_users(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get all active standard users for admin selection."""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Only admins can view users")
+        
+    users = db.query(User).filter(User.is_active == True, User.is_admin == False).all()
+    return [{"id": u.id, "username": u.username, "email": u.email, "created_at": u.created_at} for u in users]
+
 
 @router.post("/admin/approve-user/{user_id}")
 async def approve_user(

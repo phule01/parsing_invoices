@@ -36,61 +36,51 @@ class SettingsUpdate:
 
 @router.get("/")
 async def get_settings(request: Request, db: Session = Depends(get_db)):
-    """Get current settings. Admins see all, standard users see limited info."""
+    """Get current settings for the authenticated user."""
     from app.core.security import get_token_from_request, decode_token
     
     token = get_token_from_request(request)
     data = decode_token(token)
     
-    # We fetch the first admin user to store global settings
-    admin_user = db.query(User).filter(User.is_admin == True).first()
     current_user = db.query(User).filter(User.id == data["user_id"]).first()
     if not current_user:
         raise HTTPException(status_code=404, detail="User not found")
         
-    is_admin = current_user.is_admin
-    
-    if is_admin:
-        return {
-            "EMAIL_ADDRESS": admin_user.email if admin_user and admin_user.email else os.getenv("EMAIL_ADDRESS", ""),
-            "GEMINI_API_KEY": admin_user.gemini_api_key if admin_user and admin_user.gemini_api_key else os.getenv("GEMINI_API_KEY", ""),
-            "TELEGRAM_BOT_TOKEN": admin_user.telegram_bot_token if admin_user and admin_user.telegram_bot_token else os.getenv("TELEGRAM_BOT_TOKEN", ""),
-            "TELEGRAM_CHAT_ID": current_user.telegram_chat_id or "",
-            "IMAP_SERVER": admin_user.imap_server if admin_user and admin_user.imap_server else os.getenv("IMAP_SERVER", "imap.gmail.com"),
-            "SMTP_SERVER": admin_user.smtp_server if admin_user and admin_user.smtp_server else os.getenv("SMTP_SERVER", "smtp.gmail.com"),
-        }
-    else:
-        # Standard users see email address to verify it's working, and their own Telegram config
-        return {
-            "EMAIL_ADDRESS": admin_user.email if admin_user and admin_user.email else os.getenv("EMAIL_ADDRESS", ""),
-            "IMAP_SERVER": admin_user.imap_server if admin_user and admin_user.imap_server else os.getenv("IMAP_SERVER", "imap.gmail.com"),
-            "SMTP_SERVER": admin_user.smtp_server if admin_user and admin_user.smtp_server else os.getenv("SMTP_SERVER", "smtp.gmail.com"),
-            "GEMINI_API_KEY": "",
-            "TELEGRAM_BOT_TOKEN": "",
-            "TELEGRAM_CHAT_ID": current_user.telegram_chat_id or "",
-        }
+    return {
+        "EMAIL_ADDRESS": current_user.email or "",
+        "GEMINI_API_KEY": current_user.gemini_api_key or "",
+        "TELEGRAM_BOT_TOKEN": current_user.telegram_bot_token or "",
+        "TELEGRAM_CHAT_ID": current_user.telegram_chat_id or "",
+        "IMAP_SERVER": current_user.imap_server or os.getenv("IMAP_SERVER", "imap.gmail.com"),
+        "SMTP_SERVER": current_user.smtp_server or os.getenv("SMTP_SERVER", "smtp.gmail.com"),
+    }
 
 @router.get("/system")
 async def get_system_settings(request: Request, db: Session = Depends(get_db)):
-    """Internal endpoint for email_listener to get full credentials including passwords."""
+    """Internal endpoint for email_listener to get full credentials for ALL active users."""
     secret = request.headers.get("X-Internal-Secret")
     expected_secret = os.getenv("SECRET_KEY", "your-secret-key-change-in-production-use-random-32-chars")
     if secret != expected_secret:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
         
-    admin_user = db.query(User).filter(User.is_admin == True).first()
+    users = db.query(User).filter(User.is_active == True, User.email.isnot(None), User.email != "").all()
     
-    return {
-        "EMAIL_ADDRESS": admin_user.email if admin_user and admin_user.email else os.getenv("EMAIL_ADDRESS", ""),
-        "EMAIL_PASSWORD": admin_user.email_password if admin_user and admin_user.email_password else os.getenv("EMAIL_PASSWORD", ""),
-        "GEMINI_API_KEY": admin_user.gemini_api_key if admin_user and admin_user.gemini_api_key else os.getenv("GEMINI_API_KEY", ""),
-        "TELEGRAM_BOT_TOKEN": admin_user.telegram_bot_token if admin_user and admin_user.telegram_bot_token else os.getenv("TELEGRAM_BOT_TOKEN", ""),
-        "TELEGRAM_CHAT_ID": admin_user.telegram_chat_id if admin_user and admin_user.telegram_chat_id else os.getenv("TELEGRAM_CHAT_ID", ""),
-        "IMAP_SERVER": admin_user.imap_server if admin_user and admin_user.imap_server else os.getenv("IMAP_SERVER", "imap.gmail.com"),
-        "IMAP_PORT": os.getenv("IMAP_PORT", "993"),
-        "SMTP_SERVER": admin_user.smtp_server if admin_user and admin_user.smtp_server else os.getenv("SMTP_SERVER", "smtp.gmail.com"),
-        "SMTP_PORT": os.getenv("SMTP_PORT", "587"),
-    }
+    settings_list = []
+    for user in users:
+        settings_list.append({
+            "user_id": user.id,
+            "EMAIL_ADDRESS": user.email or "",
+            "EMAIL_PASSWORD": user.email_password or "",
+            "GEMINI_API_KEY": user.gemini_api_key or "",
+            "TELEGRAM_BOT_TOKEN": user.telegram_bot_token or "",
+            "TELEGRAM_CHAT_ID": user.telegram_chat_id or "",
+            "IMAP_SERVER": user.imap_server or os.getenv("IMAP_SERVER", "imap.gmail.com"),
+            "IMAP_PORT": os.getenv("IMAP_PORT", "993"),
+            "SMTP_SERVER": user.smtp_server or os.getenv("SMTP_SERVER", "smtp.gmail.com"),
+            "SMTP_PORT": os.getenv("SMTP_PORT", "587"),
+        })
+        
+    return settings_list
 
 @router.post("/update")
 async def update_settings(
@@ -98,7 +88,7 @@ async def update_settings(
     request: Request,
     db: Session = Depends(get_db)
 ):
-    """Update settings (admins only) in the database"""
+    """Update settings for the current user in the database"""
     from app.core.security import get_token_from_request, decode_token
     
     token = get_token_from_request(request)
@@ -108,25 +98,15 @@ async def update_settings(
     if not current_user:
         raise HTTPException(status_code=404, detail="User not found")
         
-    is_admin = current_user.is_admin
-    
     try:
-        # Global Settings (Admin only)
-        if is_admin:
-            admin_user = db.query(User).filter(User.is_admin == True).first()
-            if not admin_user:
-                raise Exception("No admin user found to save settings to")
-                
-            if "EMAIL_ADDRESS" in data:
-                admin_user.email = data["EMAIL_ADDRESS"]
-            if "EMAIL_PASSWORD" in data and data["EMAIL_PASSWORD"]:
-                admin_user.email_password = data["EMAIL_PASSWORD"]
-            if "GEMINI_API_KEY" in data:
-                admin_user.gemini_api_key = data["GEMINI_API_KEY"]
-            if "TELEGRAM_BOT_TOKEN" in data:
-                admin_user.telegram_bot_token = data["TELEGRAM_BOT_TOKEN"]
-
-        # User-specific Settings (All Users)
+        if "EMAIL_ADDRESS" in data:
+            current_user.email = data["EMAIL_ADDRESS"]
+        if "EMAIL_PASSWORD" in data and data["EMAIL_PASSWORD"]:
+            current_user.email_password = data["EMAIL_PASSWORD"]
+        if "GEMINI_API_KEY" in data:
+            current_user.gemini_api_key = data["GEMINI_API_KEY"]
+        if "TELEGRAM_BOT_TOKEN" in data:
+            current_user.telegram_bot_token = data["TELEGRAM_BOT_TOKEN"]
         if "TELEGRAM_CHAT_ID" in data:
             current_user.telegram_chat_id = data["TELEGRAM_CHAT_ID"]
             
@@ -146,7 +126,7 @@ async def update_settings(
                         async with httpx.AsyncClient(timeout=10) as client:
                             resp = await client.post(
                                 f"{TELEGRAM_API_URL}/bot{data['TELEGRAM_BOT_TOKEN']}/setWebhook",
-                                json={"url": webhook_url},
+                                json={"url": f"{webhook_url}/{data['TELEGRAM_BOT_TOKEN']}"},
                             )
                             logger.info(f"Dynamic webhook re-registration from settings: {resp.text}")
                     except Exception as ex:
@@ -187,11 +167,7 @@ async def test_telegram(
     token = get_token_from_request(request)
     decoded = decode_token(token)
     
-    if not _is_admin(db, decoded["user_id"]):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only admins can test Telegram"
-        )
+    # Users test their own credentials, so no admin check required for their own testing
     
     try:
         async with httpx.AsyncClient(timeout=10) as client:
@@ -237,11 +213,7 @@ async def test_email(
     token = get_token_from_request(request)
     decoded = decode_token(token)
     
-    if not _is_admin(db, decoded["user_id"]):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only admins can test email"
-        )
+    # Any user can test their own email
     
     try:
         # Default port 587

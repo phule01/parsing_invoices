@@ -50,16 +50,27 @@ router = APIRouter(prefix="/api/invoices", tags=["invoices"])
 
 # ── Shared dependency ─────────────────────────────────────────────────────────
 
-def _current_user_id(request: Request, db: Session = Depends(get_db)) -> int:
-    """Extract and verify the JWT, return the user_id. Raises 401 on failure."""
+def _current_user_data(request: Request, db: Session = Depends(get_db)) -> dict:
+    """Extract and verify the JWT, return the token data. Raises 401 on failure."""
+    from app.core.security import SECRET_KEY
+    internal_secret = request.headers.get("X-Internal-Secret")
+    if internal_secret and internal_secret == SECRET_KEY:
+        from models import User
+        admin_user = db.query(User).filter(User.is_admin == True).first()
+        if admin_user:
+            return {"user_id": admin_user.id, "username": admin_user.username, "is_admin": True}
+
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing or invalid authorization header",
         )
-    token_data = decode_token(auth.split(" ", 1)[1])
-    return token_data["user_id"]
+    return decode_token(auth.split(" ", 1)[1])
+
+def _current_user_id(request: Request, db: Session = Depends(get_db)) -> int:
+    """Extract and verify the JWT, return the user_id. Raises 401 on failure."""
+    return _current_user_data(request, db)["user_id"]
 
 
 # ── Background notification helper ────────────────────────────────────────────
@@ -114,10 +125,23 @@ async def list_invoices(
     search: str = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=500),
-    user_id: int = Depends(_current_user_id),
+    target_user_id: int = Query(None),
+    token_data: dict = Depends(_current_user_data),
     db: Session = Depends(get_db),
 ):
     query = db.query(Invoice)
+    
+    # Multi-tenancy isolation
+    is_admin = token_data.get("is_admin", False)
+    user_id = token_data["user_id"]
+    
+    if not is_admin:
+        # Standard users only see their own invoices
+        query = query.filter(Invoice.user_id == user_id)
+    elif target_user_id:
+        # Admins can filter by a specific user
+        query = query.filter(Invoice.user_id == target_user_id)
+        
     if status_filter:
         query = query.filter(Invoice.status == status_filter)
     if search:
@@ -149,11 +173,45 @@ async def get_invoice_file(
     invoice_id: int,
     db: Session = Depends(get_db),
 ):
-    from fastapi.responses import FileResponse
+    from fastapi.responses import FileResponse, RedirectResponse
     from pathlib import Path
+    import httpx
     
     invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
-    if not invoice or not invoice.raw_file_path:
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found in database")
+        
+    # Real-Time Web UI Viewing (The "Triệu hồi" Algorithm)
+    if getattr(invoice, 'telegram_file_id', None):
+        # We need the user's bot token
+        from models import User
+        user = db.query(User).filter(User.id == invoice.user_id, User.is_active == True).first()
+        if not user or not user.telegram_bot_token:
+            # Fallback to global config
+            from app.services.telegram_service import get_telegram_config
+            bot_token, _ = get_telegram_config()
+        else:
+            bot_token = user.telegram_bot_token.strip()
+            
+        if not bot_token:
+            raise HTTPException(status_code=500, detail="Telegram bot token not configured")
+            
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(f"https://api.telegram.org/bot{bot_token}/getFile?file_id={invoice.telegram_file_id}")
+                resp.raise_for_status()
+                data = resp.json()
+                if data.get("ok"):
+                    file_path = data.get("result", {}).get("file_path")
+                    if file_path:
+                        download_url = f"https://api.telegram.org/file/bot{bot_token}/{file_path}"
+                        return RedirectResponse(url=download_url, status_code=302)
+        except Exception as e:
+            logger.error(f"Error fetching file from Telegram: {e}")
+            raise HTTPException(status_code=502, detail="Failed to retrieve file from Cloud CDN")
+            
+    # Legacy fallback: local file
+    if not invoice.raw_file_path:
         raise HTTPException(status_code=404, detail="File not found in database")
         
     file_path = Path(invoice.raw_file_path)
@@ -179,9 +237,17 @@ async def get_invoice_file(
 async def create_invoice(
     invoice_data: InvoiceCreate,
     background_tasks: BackgroundTasks,
-    user_id: int = Depends(_current_user_id),
+    token_data: dict = Depends(_current_user_data),
     db: Session = Depends(get_db),
 ):
+    user_id = token_data["user_id"]
+    is_admin = token_data.get("is_admin", False)
+    
+    # If caller is admin and provided a user_id, use it (for email listener)
+    if is_admin and invoice_data.user_id is not None:
+        final_user_id = invoice_data.user_id
+    else:
+        final_user_id = user_id
     full_number = (
         f"{invoice_data.invoice_series}/{invoice_data.invoice_number}"
         if invoice_data.invoice_series
@@ -228,7 +294,7 @@ async def create_invoice(
         ai_confidence=getattr(invoice_data, "ai_confidence", 0),
         signatures=getattr(invoice_data, "signatures", None),
         status="pending",
-        user_id=user_id,
+        user_id=final_user_id,
     )
     db.add(db_invoice)
     db.flush()

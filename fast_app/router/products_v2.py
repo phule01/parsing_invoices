@@ -14,7 +14,7 @@ from typing import List
 from database import get_db
 from models import Product
 from auth_schemas import ProductCreate, ProductUpdate, ProductResponse
-from app.core.security import get_current_user_id          # ← was defined inline here
+from app.core.security import get_current_user
 from websocket_manager import connection_manager
 from app.services.telegram_service import broadcast_to_web_ui
 
@@ -30,10 +30,17 @@ async def list_products(
     low_stock: bool = Query(False),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=500),
-    user_id: int = Depends(get_current_user_id),
+    target_user_id: int = Query(None),
+    current_user = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     query = db.query(Product)
+    
+    if not current_user.is_admin:
+        query = query.filter(Product.user_id == current_user.id)
+    elif target_user_id:
+        query = query.filter(Product.user_id == target_user_id)
+        
     if category:
         query = query.filter(Product.category == category)
     if search:
@@ -51,15 +58,18 @@ async def list_products(
 
 @router.get("/categories")
 async def get_categories(
-    user_id: int = Depends(get_current_user_id),
+    target_user_id: int = Query(None),
+    current_user = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    categories = (
-        db.query(Product.category)
-        .distinct()
-        .filter(Product.category.isnot(None))
-        .all()
-    )
+    query = db.query(Product.category).distinct().filter(Product.category.isnot(None))
+    
+    if not current_user.is_admin:
+        query = query.filter(Product.user_id == current_user.id)
+    elif target_user_id:
+        query = query.filter(Product.user_id == target_user_id)
+        
+    categories = query.all()
     return {"categories": [c[0] for c in categories]}
 
 
@@ -68,10 +78,14 @@ async def get_categories(
 @router.get("/{product_id}", response_model=ProductResponse)
 async def get_product(
     product_id: int,
-    user_id: int = Depends(get_current_user_id),
+    current_user = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    product = db.query(Product).filter(Product.id == product_id).first()
+    query = db.query(Product).filter(Product.id == product_id)
+    if not current_user.is_admin:
+        query = query.filter(Product.user_id == current_user.id)
+        
+    product = query.first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     return product
@@ -82,17 +96,24 @@ async def get_product(
 @router.post("/", response_model=ProductResponse)
 async def create_product(
     product_data: ProductCreate,
-    user_id: int = Depends(get_current_user_id),
+    current_user = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    query_sku = db.query(Product).filter(Product.sku == product_data.sku)
+    query_bc = db.query(Product).filter(Product.barcode == product_data.barcode)
+    
+    if not current_user.is_admin:
+        query_sku = query_sku.filter(Product.user_id == current_user.id)
+        query_bc = query_bc.filter(Product.user_id == current_user.id)
+
     if product_data.sku:
-        if db.query(Product).filter(Product.sku == product_data.sku).first():
+        if query_sku.first():
             raise HTTPException(status_code=400, detail="SKU already exists")
     if product_data.barcode:
-        if db.query(Product).filter(Product.barcode == product_data.barcode).first():
+        if query_bc.first():
             raise HTTPException(status_code=400, detail="Barcode already exists")
 
-    product = Product(**product_data.model_dump())
+    product = Product(**product_data.model_dump(), user_id=current_user.id)
     db.add(product)
     db.commit()
     db.refresh(product)
@@ -114,10 +135,14 @@ async def create_product(
 async def update_product(
     product_id: int,
     product_data: ProductUpdate,
-    user_id: int = Depends(get_current_user_id),
+    current_user = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    product = db.query(Product).filter(Product.id == product_id).first()
+    query = db.query(Product).filter(Product.id == product_id)
+    if not current_user.is_admin:
+        query = query.filter(Product.user_id == current_user.id)
+        
+    product = query.first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
@@ -134,7 +159,7 @@ async def update_product(
     if changes:
         await connection_manager.notify_product_updated(
             product_id=product.id, changes=changes,
-            user_id=user_id, source="web",
+            user_id=current_user.id, source="web",
         )
     return product
 
@@ -144,10 +169,14 @@ async def update_product(
 @router.delete("/{product_id}")
 async def delete_product(
     product_id: int,
-    user_id: int = Depends(get_current_user_id),
+    current_user = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    product = db.query(Product).filter(Product.id == product_id).first()
+    query = db.query(Product).filter(Product.id == product_id)
+    if not current_user.is_admin:
+        query = query.filter(Product.user_id == current_user.id)
+        
+    product = query.first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
@@ -172,10 +201,14 @@ async def delete_product(
 async def update_stock(
     product_id: int,
     quantity_change: int,
-    user_id: int = Depends(get_current_user_id),
+    current_user = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    product = db.query(Product).filter(Product.id == product_id).first()
+    query = db.query(Product).filter(Product.id == product_id)
+    if not current_user.is_admin:
+        query = query.filter(Product.user_id == current_user.id)
+        
+    product = query.first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
@@ -190,7 +223,7 @@ async def update_stock(
     await connection_manager.notify_product_updated(
         product_id=product.id,
         changes={"quantity_in_stock": {"old": old_stock, "new": product.quantity_in_stock}},
-        user_id=user_id, source="web",
+        user_id=current_user.id, source="web",
     )
     return {"message": "Stock updated", "new_stock": product.quantity_in_stock}
 
@@ -199,12 +232,16 @@ async def update_stock(
 
 @router.post("/cleanup/zero-stock")
 async def cleanup_zero_stock(
-    user_id: int = Depends(get_current_user_id),
+    current_user = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    zero = db.query(Product).filter(
+    query = db.query(Product).filter(
         (Product.quantity_in_stock <= 0) | Product.quantity_in_stock.is_(None)
-    ).all()
+    )
+    if not current_user.is_admin:
+        query = query.filter(Product.user_id == current_user.id)
+        
+    zero = query.all()
     names = [p.name for p in zero]
     for p in zero:
         db.delete(p)

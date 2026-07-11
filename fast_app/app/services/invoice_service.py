@@ -216,7 +216,7 @@ class InvoiceService:
 
             product = (
                 self._db.query(Product)
-                .filter(Product.name == item.item_name)
+                .filter(Product.name == item.item_name, Product.user_id == invoice.user_id)
                 .first()
             )
 
@@ -251,6 +251,7 @@ class InvoiceService:
                     quantity_in_stock=qty,
                     price=price,
                     description=f"From invoice {invoice.invoice_number}",
+                    user_id=invoice.user_id,
                 )
                 self._db.add(new_product)
                 self._db.flush()  # populate new_product.id before the audit log
@@ -286,7 +287,7 @@ class InvoiceService:
             qty = int(float(item.quantity))
             product = (
                 self._db.query(Product)
-                .filter(Product.name == item.item_name)
+                .filter(Product.name == item.item_name, Product.user_id == invoice.user_id)
                 .first()
             )
             if product and (product.quantity_in_stock or 0) < qty:
@@ -306,7 +307,7 @@ class InvoiceService:
             qty = int(float(item.quantity))
             product = (
                 self._db.query(Product)
-                .filter(Product.name == item.item_name)
+                .filter(Product.name == item.item_name, Product.user_id == invoice.user_id)
                 .first()
             )
             if not product:

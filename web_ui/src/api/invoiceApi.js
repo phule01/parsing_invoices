@@ -41,12 +41,13 @@ async function parseResponse(res) {
 
 /**
  * @param {string} token
- * @param {{ status?: string, search?: string, skip?: number, limit?: number }} params
+ * @param {{ status?: string, search?: string, skip?: number, limit?: number, target_user_id?: string }} params
  */
-export async function fetchInvoices(token, { status, search, skip = 0, limit = 100 } = {}) {
+export async function fetchInvoices(token, { status, search, skip = 0, limit = 100, target_user_id } = {}) {
   const url = new URL(`${BASE}/api/invoices/`, window.location.origin);
   if (status) url.searchParams.set('status', status);
   if (search) url.searchParams.set('search', search);
+  if (target_user_id) url.searchParams.set('target_user_id', target_user_id);
   url.searchParams.set('skip', skip);
   url.searchParams.set('limit', limit);
 

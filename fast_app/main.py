@@ -80,48 +80,48 @@ create_tables_with_retry()
 
 async def setup_telegram_webhook():
     """
-    Try to set up the Telegram webhook on startup.
-    This is optional — if it fails, the app continues to work (though callbacks won't arrive).
+    Try to set up the Telegram webhook on startup for all configured users.
     For local development, you may need to use ngrok or another tunneling service.
     """
     from app.services.telegram_service import TELEGRAM_API_URL
     from database import SessionLocal
     from models import User
     
-    bot_token = None
-    with SessionLocal() as db:
-        admin_user = db.query(User).filter(User.is_admin == True).first()
-        if admin_user and admin_user.telegram_bot_token:
-            bot_token = admin_user.telegram_bot_token.strip()
-            
-    if not bot_token:
-        bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
-
-    if not bot_token:
-        logger.debug("⏭️  Skipping Telegram webhook setup — no bot token configured")
-        return
-
-    webhook_url = os.getenv("TELEGRAM_WEBHOOK_URL")
-    if not webhook_url:
+    webhook_url_base = os.getenv("TELEGRAM_WEBHOOK_URL")
+    if not webhook_url_base:
         logger.warning(
             "⚠️  TELEGRAM_WEBHOOK_URL not set. Telegram callbacks won't work.\n"
-            "   Set TELEGRAM_WEBHOOK_URL in .env to enable (e.g., https://your-domain.com/api/telegram/webhook)"
+            "   Set TELEGRAM_WEBHOOK_URL in .env to enable (e.g., https://your-domain.com/api/telegram)"
         )
         return
 
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post(
-                f"{TELEGRAM_API_URL}/bot{bot_token}/setWebhook",
-                json={"url": webhook_url},
-            )
-            data = resp.json()
-            if data.get("ok"):
-                logger.info(f"✅ Telegram webhook set to: {webhook_url}")
-            else:
-                logger.error(f"❌ Failed to set Telegram webhook: {data.get('description')}")
-    except Exception as exc:
-        logger.error(f"❌ Error setting up Telegram webhook: {exc}")
+    with SessionLocal() as db:
+        users = db.query(User).filter(User.is_active == True, User.telegram_bot_token.isnot(None), User.telegram_bot_token != "").all()
+        
+    if not users:
+        logger.debug("⏭️  Skipping Telegram webhook setup — no active users have bot tokens configured")
+        return
+
+    import asyncio
+    async def _register(bot_token: str, username: str):
+        # We append the token to the URL so the router knows which bot received the callback
+        url = f"{webhook_url_base.rstrip('/')}/webhook/{bot_token}"
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.post(
+                    f"{TELEGRAM_API_URL}/bot{bot_token}/setWebhook",
+                    json={"url": url},
+                )
+                data = resp.json()
+                if data.get("ok"):
+                    logger.info(f"✅ Telegram webhook set for user {username}: {url}")
+                else:
+                    logger.error(f"❌ Failed to set Telegram webhook for {username}: {data.get('description')}")
+        except Exception as exc:
+            logger.error(f"❌ Error setting up Telegram webhook for {username}: {exc}")
+
+    tasks = [_register(user.telegram_bot_token.strip(), user.username) for user in users]
+    await asyncio.gather(*tasks)
 
 
 @asynccontextmanager

@@ -100,7 +100,7 @@ class AsyncPipeline:
 
             try:
                 logger.info(f"Parsing [{retries + 1}]: {file_path}")
-                result: Any = await parse_func(file_path)
+                result: Any = await parse_func(file_path, metadata)
 
                 if result is None:
                     raise ValueError(f"parse_func returned None for {file_path}")

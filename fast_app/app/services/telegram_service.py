@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import logging
 import os
+import asyncio
 from typing import Optional
 
 import httpx
@@ -137,6 +138,81 @@ async def send_message_to_user(
         logger.error("❌ Error sending Telegram message to specific user: %s", exc)
 
     return {"ok": False, "message_id": None, "chat_id": chat_id}
+
+
+async def send_document_with_retry(
+    file_path: str,
+    caption: str,
+    bot_token: str,
+    chat_id: str,
+    reply_markup: Optional[dict] = None,
+    max_retries: int = 3
+) -> dict:
+    """Send a document to a specific user with exponential backoff and rate limiting."""
+    # Active Throttling to prevent spam
+    await asyncio.sleep(1)
+    
+    import json
+    
+    for attempt in range(max_retries):
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                with open(file_path, "rb") as f:
+                    filename = os.path.basename(file_path)
+                    ext = filename.split(".")[-1].lower()
+                    mime_type = "application/pdf"
+                    if ext == "xml":
+                        mime_type = "application/xml"
+                    elif ext in ["png", "jpg", "jpeg"]:
+                        mime_type = f"image/{ext.replace('jpg', 'jpeg')}"
+                        
+                    files = {"document": (filename, f, mime_type)}
+                    data = {
+                        "chat_id": chat_id,
+                        "caption": caption,
+                        "parse_mode": "HTML",
+                    }
+                    if reply_markup:
+                        data["reply_markup"] = json.dumps(reply_markup)
+                        
+                    resp = await client.post(
+                        f"{TELEGRAM_API_URL}/bot{bot_token}/sendDocument",
+                        data=data,
+                        files=files
+                    )
+                    
+                    if resp.status_code == 429:
+                        retry_after = int(resp.headers.get("Retry-After", 5))
+                        logger.warning(f"⚠️ Telegram Rate Limit hit. Retrying after {retry_after}s (Attempt {attempt+1}/{max_retries})")
+                        await asyncio.sleep(retry_after)
+                        continue
+                        
+                    resp.raise_for_status()
+                    resp_data = resp.json()
+                    
+                    if resp_data.get("ok"):
+                        msg = resp_data.get("result", {})
+                        msg_id = msg.get("message_id")
+                        # Capture file_id
+                        document = msg.get("document")
+                        file_id = None
+                        if document:
+                            file_id = document.get("file_id")
+                        
+                        logger.info(f"✅ Telegram document sent (msg_id={msg_id}, file_id={file_id})")
+                        return {"ok": True, "message_id": msg_id, "chat_id": chat_id, "file_id": file_id}
+                        
+                    logger.error("❌ Telegram API error (sendDocument): %s", resp_data.get("description"))
+                    return {"ok": False, "message_id": None, "chat_id": chat_id, "file_id": None}
+                    
+        except Exception as exc:
+            logger.error("❌ Error sending Telegram document (Attempt %s/%s): %s", attempt+1, max_retries, exc)
+            if attempt < max_retries - 1:
+                await asyncio.sleep(2 ** attempt)
+            else:
+                return {"ok": False, "message_id": None, "chat_id": chat_id, "file_id": None}
+    
+    return {"ok": False, "message_id": None, "chat_id": chat_id, "file_id": None}
 
 
 async def send_photo_with_metadata(
@@ -308,46 +384,64 @@ async def send_invoice_approval_request(
         ]]
     }
 
-    # Broadcast to all users with telegram configured
     from database import SessionLocal
-    from models import User, InvoiceNotification
+    from models import User, Invoice, InvoiceNotification
 
     at_least_one_success = False
     
-    global_bot_token, _ = get_telegram_config()
-    
-    if global_bot_token:
-        try:
-            with SessionLocal() as db:
-                users = db.query(User).filter(
-                    User.is_active == True,
-                    User.telegram_chat_id.isnot(None),
-                    User.telegram_chat_id != ""
-                ).all()
-    
-                for u in users:
-                    res = await send_message_to_user(
-                        message, 
-                        bot_token=global_bot_token, 
-                        chat_id=u.telegram_chat_id, 
-                        reply_markup=reply_markup
-                    )
+    try:
+        with SessionLocal() as db:
+            # Get the invoice to find the owning user
+            invoice = db.query(Invoice).filter(Invoice.id == invoice_id).first()
+            if not invoice or not invoice.user_id:
+                logger.warning(f"No user associated with invoice {invoice_id}. Cannot send Telegram approval request.")
+            else:
+                user = db.query(User).filter(User.id == invoice.user_id, User.is_active == True).first()
+                if user and user.telegram_bot_token and user.telegram_chat_id:
+                    bot_token = user.telegram_bot_token.strip()
+                    chat_id = user.telegram_chat_id.strip()
+                    
+                    if raw_file_path and os.path.exists(raw_file_path):
+                        res = await send_document_with_retry(
+                            file_path=raw_file_path,
+                            caption=message,
+                            bot_token=bot_token,
+                            chat_id=chat_id,
+                            reply_markup=reply_markup
+                        )
+                        if res.get("file_id"):
+                            invoice.telegram_file_id = res.get("file_id")
+                            db.commit()
+                            # Immediate Garbage Collection (Zero-Disk-Space Policy)
+                            try:
+                                os.remove(raw_file_path)
+                                logger.info(f"🗑️ Garbage Collection: Deleted local file {raw_file_path}")
+                            except Exception as gc_err:
+                                logger.warning(f"⚠️ Failed to delete local file {raw_file_path}: {gc_err}")
+                    else:
+                        res = await send_message_to_user(
+                            message, 
+                            bot_token=bot_token, 
+                            chat_id=chat_id, 
+                            reply_markup=reply_markup
+                        )
+                    
                     if res["ok"]:
                         notif = InvoiceNotification(
                             invoice_id=invoice_id,
-                            user_id=u.id,
-                            bot_token=global_bot_token,
-                            chat_id=u.telegram_chat_id,
+                            user_id=user.id,
+                            bot_token=bot_token,
+                            chat_id=chat_id,
                             message_id=str(res["message_id"])
                         )
                         db.add(notif)
+                        db.commit()
                         at_least_one_success = True
-                
-                db.commit()
-        except Exception as e:
-            logger.error(f"Error broadcasting invoice approval request: {e}")
-    else:
-        logger.warning("No global TELEGRAM_BOT_TOKEN found. Cannot send notifications.")
+                        logger.info(f"✅ Sent approval request to user {user.username} for invoice {invoice_id}")
+                else:
+                    logger.warning(f"User {invoice.user_id} lacks Telegram configuration or is inactive.")
+    except Exception as e:
+        logger.error(f"Error sending invoice approval request: {e}")
 
     await broadcast_to_web_ui({
         "type": "invoice_received",
@@ -390,24 +484,21 @@ async def send_invoice_status(
     if note:
         message += f"\n<b>Ghi chú:</b> {note}"
 
-    # Broadcast status to all configured users
+    # Send status to the specific user who owns this invoice
     from database import SessionLocal
-    from models import User
+    from models import User, Invoice
     
-    global_bot_token, _ = get_telegram_config()
-    
-    if global_bot_token:
-        try:
-            with SessionLocal() as db:
-                users = db.query(User).filter(
-                    User.is_active == True,
-                    User.telegram_chat_id.isnot(None),
-                    User.telegram_chat_id != ""
-                ).all()
-                for u in users:
-                    await send_message_to_user(message, global_bot_token, u.telegram_chat_id)
-        except Exception as e:
-            logger.error(f"Error broadcasting invoice status: {e}")
+    sent = False
+    try:
+        with SessionLocal() as db:
+            invoice = db.query(Invoice).filter(Invoice.invoice_number == invoice_number).first()
+            if invoice and invoice.user_id:
+                user = db.query(User).filter(User.id == invoice.user_id, User.is_active == True).first()
+                if user and user.telegram_bot_token and user.telegram_chat_id:
+                    res = await send_message_to_user(message, user.telegram_bot_token.strip(), user.telegram_chat_id.strip())
+                    sent = res.get("ok", False)
+    except Exception as e:
+        logger.error(f"Error sending invoice status: {e}")
     await broadcast_to_web_ui({
         "type": notif_type,
         "title": title,

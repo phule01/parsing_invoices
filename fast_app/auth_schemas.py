@@ -13,6 +13,7 @@ class UserRegister(BaseModel):
     """User registration request."""
     username: str
     password: str
+    email: Optional[str] = None
 
 class AdminRegister(BaseModel):
     """Admin setup/registration request with all credentials."""
@@ -86,10 +87,12 @@ class InvoiceCreate(BaseModel):
     buyer_tax_code: Optional[str] = None
     buyer_address: Optional[str] = None
     items: List[InvoiceItemCreate]
+    raw_file_path: Optional[str] = None
     total_before_tax: float
     vat_rate: float = 0
     vat_amount: float = 0
     total_amount: float
+    user_id: Optional[int] = None
 
 class InvoiceUpdate(BaseModel):
     """Update invoice."""
@@ -108,6 +111,7 @@ class InvoiceResponse(BaseModel):
     buyer_tax_code: Optional[str]
     status: str
     total_amount: float
+    telegram_file_id: Optional[str] = None
     items: List[InvoiceItemResponse]
     created_at: datetime
     updated_at: datetime

@@ -79,21 +79,24 @@ def _format_date_for_api(date_str: Optional[str]) -> Optional[str]:
     return date_str
 
 
-async def parse_invoice_file(file_path: str) -> Optional[Dict[str, Any]]:
+async def parse_invoice_file(file_path: str, metadata: Dict[str, Any] = None) -> Optional[Dict[str, Any]]:
     """
     Parse invoice file using Gemini API with rate limiting and retry logic.
     
     Args:
         file_path: Path to PDF, image, or XML file
+        metadata: Dictionary containing 'gemini_api_key' and other info
         
     Returns:
         Dictionary with extracted invoice data or None if parsing fails
     """
     logger.info(f"[AI PARSER] Processing with Gemini model {GEMINI_MODEL}: {file_path}")
     
-    api_key = os.getenv("GEMINI_API_KEY", "")
+    metadata = metadata or {}
+    api_key = metadata.get("gemini_api_key") or os.getenv("GEMINI_API_KEY", "")
+    
     if not api_key:
-        logger.error("[AI PARSER] GEMINI_API_KEY not set in environment")
+        logger.error(f"[AI PARSER] GEMINI_API_KEY not set for file: {file_path}")
         return None
     prompt = """Trích xuất hóa đơn từ tài liệu và trả về dữ liệu dưới dạng JSON cấu trúc.
 Các trường cần thiết:
@@ -179,7 +182,7 @@ Quan trọng:
         try:
             async with _api_semaphore:
                 await _rate_limit_delay()
-                parsed = await _call_gemini_api(parts)
+                parsed = await _call_gemini_api(parts, api_key)
                 
             if parsed:
                 # Validate and clean the parsed data
@@ -307,7 +310,7 @@ async def _convert_image_to_parts(file_path: str) -> list:
         return []
 
 
-async def _call_gemini_api(parts: list) -> Optional[Dict[str, Any]]:
+async def _call_gemini_api(parts: list, api_key: str) -> Optional[Dict[str, Any]]:
     """
     Call Gemini API with proper timeout and rate-limit error handling.
     
@@ -316,6 +319,7 @@ async def _call_gemini_api(parts: list) -> Optional[Dict[str, Any]]:
     
     Args:
         parts: List of content parts (text, images, etc.)
+        api_key: The user's Gemini API key
         
     Returns:
         Parsed JSON response or None on recoverable parse errors
@@ -330,7 +334,7 @@ async def _call_gemini_api(parts: list) -> Optional[Dict[str, Any]]:
     # but the v1beta endpoint actually accepts both `models/gemini-pro` and `gemini-pro`
     # if we insert it directly into the path.
     url_model = model_name if not model_name.startswith("models/") else model_name[7:]
-    api_key = os.getenv("GEMINI_API_KEY", "")
+    
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{url_model}:generateContent?key={api_key}"
 
     payload = {

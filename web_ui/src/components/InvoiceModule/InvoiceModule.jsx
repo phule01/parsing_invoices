@@ -11,6 +11,8 @@ import { useAuth } from '../../context/AuthContext';
 import InvoiceDetailsModal from './InvoiceDetailsModal';
 import './InvoiceModule.css';
 
+const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === 'development' ? 'http://localhost:8000' : '');
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const EMPTY_FORM = {
@@ -37,7 +39,7 @@ const STATUS_LABELS = {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-function InvoiceModule() {
+function InvoiceModule({ adminTargetUser }) {
   const { token } = useAuth();
   const { subscribe } = useWebSocket();
 
@@ -55,8 +57,8 @@ function InvoiceModule() {
   const [formData, setFormData] = useState(EMPTY_FORM);
   const [deleteModal, setDeleteModal] = useState(EMPTY_DELETE_MODAL);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
-
-  // ── Data fetching ───────────────────────────────────────────────────────────
+  
+  // Local user filter removed, now passed as prop `adminTargetUser`
 
   const loadInvoices = useCallback(async () => {
     setLoading(true);
@@ -65,6 +67,7 @@ function InvoiceModule() {
       const data = await fetchInvoicesApi(token, {
         status: statusFilter || undefined,
         search: searchTerm || undefined,
+        target_user_id: adminTargetUser?.id || undefined,
         limit: 100,
       });
       setInvoices(data);
@@ -73,7 +76,7 @@ function InvoiceModule() {
     } finally {
       setLoading(false);
     }
-  }, [token, statusFilter, searchTerm]);
+  }, [token, statusFilter, searchTerm, adminTargetUser]);
 
   useEffect(() => { loadInvoices(); }, [loadInvoices]);
 

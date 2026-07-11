@@ -251,28 +251,35 @@ function SettingsModule() {
     }
   };
 
-  const AdminSection = () => {
-    if (!user?.is_admin) return null;
-    return (
-      <>
-        <hr style={{margin: '40px 0', border: '1px solid #eee'}} />
-        <h2>⚙️ Global System Settings</h2>
-        <p className="admin-only">👤 Admin only - Configure system integrations</p>
+        {/* Admin Section is now just for User Management, handled below */}
 
+
+
+  return (
+    <div className="settings-module">
+      <h2>⚙️ Settings & Integrations</h2>
+      <p>Configure your personal and system integrations here.</p>
+
+      {error && <div className="error-message">{error}</div>}
+      {success && <div className="success-message">{success}</div>}
+
+      {!user?.is_admin && (
+        <form onSubmit={handleSubmit} className="settings-form">
+        
         {/* Email Configuration */}
         <fieldset className="settings-section">
           <legend>📧 Email Configuration (Gmail)</legend>
           <div className="form-group">
-            <label htmlFor="EMAIL_ADDRESS">Sender Email Address</label>
+            <label htmlFor="EMAIL_ADDRESS">Email Address</label>
             <input
               id="EMAIL_ADDRESS"
               type="email"
               name="EMAIL_ADDRESS"
-              value={settings.EMAIL_ADDRESS}
+              value={settings.EMAIL_ADDRESS || ''}
               onChange={handleChange}
               placeholder="your-email@gmail.com"
             />
-            <small>Email to send invoices from</small>
+            <small>Your personal Gmail account to monitor for invoices</small>
           </div>
           <div className="form-group">
             <label htmlFor="EMAIL_PASSWORD">Email App Password</label>
@@ -280,10 +287,15 @@ function SettingsModule() {
               id="EMAIL_PASSWORD"
               type="password"
               name="EMAIL_PASSWORD"
-              value={settings.EMAIL_PASSWORD}
+              value={settings.EMAIL_PASSWORD || ''}
               onChange={handleChange}
               placeholder="••••••••••••••••"
             />
+          </div>
+          <div className="form-actions" style={{marginTop: '10px'}}>
+            <button type="button" onClick={handleTestEmail} disabled={!!testInProgress} className="btn-secondary">
+              {testInProgress === 'email' ? '⏳ Testing...' : '🧪 Test Email Connection'}
+            </button>
           </div>
         </fieldset>
 
@@ -296,68 +308,51 @@ function SettingsModule() {
               id="GEMINI_API_KEY"
               type="password"
               name="GEMINI_API_KEY"
-              value={settings.GEMINI_API_KEY}
+              value={settings.GEMINI_API_KEY || ''}
               onChange={handleChange}
               placeholder="••••••••••••••••••••••••••••"
             />
             <small>
-              Get key from{' '}
-              <a href="https://ai.google.dev" target="_blank" rel="noopener noreferrer">
-                Google AI Studio
-              </a>
+              Your personal Gemini API key for invoice parsing
             </small>
           </div>
         </fieldset>
 
         {/* Telegram Configuration */}
         <fieldset className="settings-section">
-          <legend>🤖 Telegram Bot Token (Global)</legend>
+          <legend>🤖 Telegram Configuration</legend>
           <div className="form-group">
             <label htmlFor="TELEGRAM_BOT_TOKEN">Telegram Bot Token</label>
             <input
               id="TELEGRAM_BOT_TOKEN"
               type="password"
               name="TELEGRAM_BOT_TOKEN"
-              value={settings.TELEGRAM_BOT_TOKEN}
+              value={settings.TELEGRAM_BOT_TOKEN || ''}
               onChange={handleChange}
               placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
             />
-            <small>This bot will be used to send notifications to all users.</small>
+            <small>Your personal Telegram Bot token</small>
           </div>
-        </fieldset>
-      </>
-    );
-  };
-
-  return (
-    <div className="settings-module">
-      <h2>⚙️ Settings & Integrations</h2>
-      <p>Configure your personal and system integrations here.</p>
-
-      {error && <div className="error-message">{error}</div>}
-      {success && <div className="success-message">{success}</div>}
-
-      <form onSubmit={handleSubmit} className="settings-form">
-        
-        {/* Personal Telegram Configuration (All Users) */}
-        <fieldset className="settings-section">
-          <legend>📱 Personal Telegram Notification</legend>
-
+          
           <div className="form-group">
             <label htmlFor="TELEGRAM_CHAT_ID">Telegram Chat ID</label>
             <input
               id="TELEGRAM_CHAT_ID"
               type="text"
               name="TELEGRAM_CHAT_ID"
-              value={settings.TELEGRAM_CHAT_ID}
+              value={settings.TELEGRAM_CHAT_ID || ''}
               onChange={handleChange}
               placeholder="123456789"
             />
-            <small>Your personal Chat ID to receive approval requests from the central bot.</small>
+            <small>Your personal Chat ID to receive approval requests from your bot.</small>
+          </div>
+
+          <div className="form-actions" style={{marginTop: '10px'}}>
+            <button type="button" onClick={handleTestTelegram} disabled={!!testInProgress} className="btn-secondary">
+              {testInProgress === 'telegram' ? '⏳ Testing...' : '🧪 Test Telegram Message'}
+            </button>
           </div>
         </fieldset>
-
-        <AdminSection />
 
         {/* Submit Button */}
         <div className="form-actions">
@@ -366,12 +361,13 @@ function SettingsModule() {
           </button>
         </div>
       </form>
+      )}
 
       <div className="settings-info">
         <h3>ℹ️ Important Notes</h3>
         <ul>
-          <li>✅ Telegram settings are personal to your account.</li>
-          {user?.is_admin && <li>📋 Global settings (Email, API) affect the entire system and can only be modified by admins.</li>}
+          {!user?.is_admin && <li>✅ Integration settings (Email, API, Telegram) are personal to your account.</li>}
+          {user?.is_admin && <li>📋 As an Admin, you can only manage user accounts. Integration settings are handled by individual users.</li>}
         </ul>
       </div>
 

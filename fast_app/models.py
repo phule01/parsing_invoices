@@ -58,10 +58,12 @@ class Product(Base):
     category = Column(String(100), nullable=True)
     supplier = Column(String(200), nullable=True)
     image_url = Column(Text, nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
     invoice_items = relationship("InvoiceItem", back_populates="product", cascade="all, delete-orphan")
+    user = relationship("User")
 
 class Invoice(Base):
     __tablename__ = "invoices"
@@ -101,6 +103,7 @@ class Invoice(Base):
     source_email = Column(String(255), nullable=True, index=True)
     source_type = Column(String(50), nullable=True)  # "attachment", "link", etc.
     raw_file_path = Column(Text, nullable=True)
+    telegram_file_id = Column(String(255), nullable=True)  # NEW - CDN storage
     file_format = Column(String(20), nullable=True)  # "pdf", "xml"  # NEW
     ai_confidence = Column(Numeric(5, 2), nullable=False, default=0)  # 0-100
     

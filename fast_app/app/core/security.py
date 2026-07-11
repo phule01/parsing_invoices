@@ -166,8 +166,14 @@ def get_current_user(
 ) -> User:
     """
     FastAPI dependency: decode the JWT, enforce the allow list, return the User.
-    Use with Depends() in any router that needs a full User object.
+    Bypasses JWT if X-Internal-Secret is provided (used by email_listener).
     """
+    internal_secret = request.headers.get("X-Internal-Secret")
+    if internal_secret and internal_secret == SECRET_KEY:
+        admin_user = db.query(User).filter(User.is_admin == True).first()
+        if admin_user:
+            return admin_user
+
     token = get_token_from_request(request)
     data = decode_token(token)
 
@@ -184,9 +190,14 @@ def get_current_user(
 def get_current_user_id(request: Request, db: Session = Depends(get_db)) -> int:
     """
     Lightweight dependency: decode the JWT, return only the user_id int.
-    Use when you need the user_id but not the full User object (saves a DB query).
-    This is what the invoice and product routers use.
+    Bypasses JWT if X-Internal-Secret is provided (used by email_listener).
     """
+    internal_secret = request.headers.get("X-Internal-Secret")
+    if internal_secret and internal_secret == SECRET_KEY:
+        admin_user = db.query(User).filter(User.is_admin == True).first()
+        if admin_user:
+            return admin_user.id
+
     token = get_token_from_request(request)
     return decode_token(token)["user_id"]
 
