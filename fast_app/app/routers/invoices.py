@@ -80,9 +80,10 @@ def _current_user_data(request: Request, db: Session = Depends(get_db)) -> dict:
     internal_secret = request.headers.get("X-Internal-Secret")
     if internal_secret and internal_secret == SECRET_KEY:
         from models import User
-        admin_user = db.query(User).filter(User.is_admin == True).first()
-        if admin_user:
-            return {"user_id": admin_user.id, "username": admin_user.username, "is_admin": True}
+        owner = db.query(User).filter(User.is_active == True).first()
+        if owner:
+            return {"user_id": owner.id, "username": owner.username, "is_admin": owner.is_admin}
+        raise HTTPException(status_code=500, detail="No active users found for internal task.")
 
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
@@ -138,7 +139,28 @@ async def _notify(
         ]
 
     await broadcast_to_web_ui(ws_payload)
-    await send_telegram_message(tg_messages.get(event_type, event_type))
+    
+    # Update Telegram status
+    from app.services.telegram_service import sync_invoice_notifications, send_invoice_status
+    import asyncio
+    
+    if event_type in ("invoice_approved", "invoice_rejected"):
+        action = "approve" if event_type == "invoice_approved" else "reject"
+        # 1. Send the new status message to the specific user
+        await send_invoice_status(
+            action,
+            invoice_number,
+            note="Inventory updated" if action == "approve" else "",
+        )
+        
+        # 2. Edit the original notification message(s) to remove buttons
+        response_text = (
+            f"✅ <b>Approved</b> invoice {invoice_number}.\n\nInventory updated."
+            if action == "approve"
+            else f"❌ <b>Rejected</b> invoice {invoice_number}."
+        )
+        # We fire-and-forget the sync task so it doesn't block the endpoint
+        asyncio.create_task(sync_invoice_notifications(invoice_id, response_text))
 
 
 # ── List ──────────────────────────────────────────────────────────────────────

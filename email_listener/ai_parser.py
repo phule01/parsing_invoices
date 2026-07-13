@@ -141,13 +141,13 @@ Quan trọng:
     suffix = Path(file_path).suffix.lower()
     if suffix == ".pdf":
         logger.info(f"🔄 Converting PDF to images for API: {Path(file_path).name}")
-        parts = await _convert_pdf_to_parts(file_path)
+        parts = await _convert_pdf_to_parts(file_path, metadata)
         if not parts:
             logger.error(f"❌ PDF conversion returned empty parts list")
             return None
     elif suffix in (".png", ".jpg", ".jpeg", ".tiff", ".bmp", ".gif"):
         logger.info(f"🖼️  Processing image file: {Path(file_path).name}")
-        parts = await _convert_image_to_parts(file_path)
+        parts = await _convert_image_to_parts(file_path, metadata)
     elif suffix == ".xml":
         try:
             logger.info(f"📋 Processing XML file: {Path(file_path).name}")
@@ -160,7 +160,7 @@ Quan trọng:
     else:
         # Fallback: try PDF conversion first, then read as text
         logger.info(f"❓ Unknown file type, attempting PDF conversion: {Path(file_path).name}")
-        parts = await _convert_pdf_to_parts(file_path)
+        parts = await _convert_pdf_to_parts(file_path, metadata)
         if not parts:
             try:
                 with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
@@ -214,11 +214,12 @@ async def send_image_to_telegram(
     image_bytes: bytes,
     caption: str = "",
     filename: str = "page.jpg",
-    as_document: bool = True
+    as_document: bool = True,
+    metadata: dict = None
 ) -> bool:
     """Send an image directly to Telegram from memory."""
-    bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
-    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+    bot_token = metadata.get("telegram_bot_token") if metadata else os.environ.get("TELEGRAM_BOT_TOKEN")
+    chat_id = metadata.get("telegram_chat_id") if metadata else os.environ.get("TELEGRAM_CHAT_ID")
     
     if not bot_token or not chat_id:
         return False
@@ -242,17 +243,17 @@ async def send_image_to_telegram(
         return False
 
 
-async def send_images_to_telegram(b64_images: list[str], base_caption: str = "Invoice Image Preview") -> None:
+async def send_images_to_telegram(b64_images: list[str], base_caption: str = "Invoice Image Preview", metadata: dict = None) -> None:
     """Send base64 images directly to Telegram as documents."""
     total = len(b64_images)
     for idx, b64 in enumerate(b64_images, start=1):
         image_bytes = base64.b64decode(b64)
         caption = f"{base_caption} - Page {idx}/{total}" if total > 1 else base_caption
         # Send as document so it's not compressed
-        await send_image_to_telegram(image_bytes, caption=caption, filename=f"page_{idx}.jpg", as_document=True)
+        await send_image_to_telegram(image_bytes, caption=caption, filename=f"page_{idx}.jpg", as_document=True, metadata=metadata)
 
 
-async def _convert_pdf_to_parts(file_path: str) -> list:
+async def _convert_pdf_to_parts(file_path: str, metadata: dict = None) -> list:
     """Convert PDF pages to base64-encoded images."""
     try:
         logger.info(f"📄 Starting PDF conversion: {file_path}")
@@ -284,7 +285,7 @@ async def _convert_pdf_to_parts(file_path: str) -> list:
             import asyncio
             filename = Path(file_path).name
             # Fire and forget sending to avoid blocking
-            asyncio.create_task(send_images_to_telegram(b64_images, base_caption=f"📄 Preview: {filename}"))
+            asyncio.create_task(send_images_to_telegram(b64_images, base_caption=f"📄 Preview: {filename}", metadata=metadata))
             
         logger.info(f"✅ PDF conversion complete: {len(parts)} image(s) ready for Gemini API")
         return parts
@@ -293,18 +294,25 @@ async def _convert_pdf_to_parts(file_path: str) -> list:
         return []
 
 
-async def _convert_image_to_parts(file_path: str) -> list:
+async def _convert_image_to_parts(file_path: str, metadata: dict = None) -> list:
     """Convert image file to base64-encoded data."""
     try:
         ext = Path(file_path).suffix.lower().lstrip('.')
         with open(file_path, "rb") as f:
             data = base64.b64encode(f.read()).decode("utf-8")
-        return [{
+        part = {
             "inline_data": {
                 "mime_type": f"image/{ext}",
                 "data": data
             }
-        }]
+        }
+        
+        # Send image preview directly to Telegram
+        import asyncio
+        filename = Path(file_path).name
+        asyncio.create_task(send_images_to_telegram([data], base_caption=f"🖼️ Preview: {filename}", metadata=metadata))
+        
+        return [part]
     except Exception as e:
         logger.error(f"Image conversion error: {e}")
         return []

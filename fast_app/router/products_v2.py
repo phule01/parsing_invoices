@@ -34,12 +34,7 @@ async def list_products(
     current_user = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    query = db.query(Product)
-    
-    if not current_user.is_admin:
-        query = query.filter(Product.user_id == current_user.id)
-    elif target_user_id:
-        query = query.filter(Product.user_id == target_user_id)
+    query = db.query(Product).filter(Product.user_id == current_user.id)
         
     if category:
         query = query.filter(Product.category == category)
@@ -62,12 +57,10 @@ async def get_categories(
     current_user = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    query = db.query(Product.category).distinct().filter(Product.category.isnot(None))
-    
-    if not current_user.is_admin:
-        query = query.filter(Product.user_id == current_user.id)
-    elif target_user_id:
-        query = query.filter(Product.user_id == target_user_id)
+    query = db.query(Product.category).distinct().filter(
+        Product.category.isnot(None),
+        Product.user_id == current_user.id
+    )
         
     categories = query.all()
     return {"categories": [c[0] for c in categories]}
@@ -81,9 +74,10 @@ async def get_product(
     current_user = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    query = db.query(Product).filter(Product.id == product_id)
-    if not current_user.is_admin:
-        query = query.filter(Product.user_id == current_user.id)
+    query = db.query(Product).filter(
+        Product.id == product_id,
+        Product.user_id == current_user.id
+    )
         
     product = query.first()
     if not product:
@@ -99,12 +93,8 @@ async def create_product(
     current_user = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    query_sku = db.query(Product).filter(Product.sku == product_data.sku)
-    query_bc = db.query(Product).filter(Product.barcode == product_data.barcode)
-    
-    if not current_user.is_admin:
-        query_sku = query_sku.filter(Product.user_id == current_user.id)
-        query_bc = query_bc.filter(Product.user_id == current_user.id)
+    query_sku = db.query(Product).filter(Product.sku == product_data.sku, Product.user_id == current_user.id)
+    query_bc = db.query(Product).filter(Product.barcode == product_data.barcode, Product.user_id == current_user.id)
 
     if product_data.sku:
         if query_sku.first():
@@ -138,9 +128,10 @@ async def update_product(
     current_user = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    query = db.query(Product).filter(Product.id == product_id)
-    if not current_user.is_admin:
-        query = query.filter(Product.user_id == current_user.id)
+    query = db.query(Product).filter(
+        Product.id == product_id,
+        Product.user_id == current_user.id
+    )
         
     product = query.first()
     if not product:
@@ -172,9 +163,10 @@ async def delete_product(
     current_user = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    query = db.query(Product).filter(Product.id == product_id)
-    if not current_user.is_admin:
-        query = query.filter(Product.user_id == current_user.id)
+    query = db.query(Product).filter(
+        Product.id == product_id,
+        Product.user_id == current_user.id
+    )
         
     product = query.first()
     if not product:
@@ -204,9 +196,10 @@ async def update_stock(
     current_user = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    query = db.query(Product).filter(Product.id == product_id)
-    if not current_user.is_admin:
-        query = query.filter(Product.user_id == current_user.id)
+    query = db.query(Product).filter(
+        Product.id == product_id,
+        Product.user_id == current_user.id
+    )
         
     product = query.first()
     if not product:
@@ -236,10 +229,9 @@ async def cleanup_zero_stock(
     db: Session = Depends(get_db),
 ):
     query = db.query(Product).filter(
-        (Product.quantity_in_stock <= 0) | Product.quantity_in_stock.is_(None)
+        ((Product.quantity_in_stock <= 0) | Product.quantity_in_stock.is_(None)),
+        Product.user_id == current_user.id
     )
-    if not current_user.is_admin:
-        query = query.filter(Product.user_id == current_user.id)
         
     zero = query.all()
     names = [p.name for p in zero]

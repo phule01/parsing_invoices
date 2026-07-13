@@ -264,7 +264,17 @@ function SettingsModule() {
       {success && <div className="success-message">{success}</div>}
 
       {!user?.is_admin && (
-        <form onSubmit={handleSubmit} className="settings-form">
+        <>
+          <div className="settings-guide" style={{ background: '#f8f9fa', padding: '20px', borderRadius: '10px', marginBottom: '25px', borderLeft: '5px solid #007bff', boxShadow: '0 2px 5px rgba(0,0,0,0.05)' }}>
+            <h3 style={{ margin: '0 0 15px 0', color: '#333' }}>📖 Quick Setup Guide</h3>
+            <ol style={{ margin: 0, paddingLeft: '25px', lineHeight: '1.7', color: '#555' }}>
+              <li><strong>Email Password:</strong> Generate a 16-character <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer">Google App Password</a>. Do not use your regular Gmail password.</li>
+              <li><strong>Gemini API Key:</strong> Get your free AI key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio</a>.</li>
+              <li><strong>Telegram Bot Token:</strong> Message <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer">@BotFather</a> on Telegram, create a new bot (<code>/newbot</code>), and copy the HTTP API Token.</li>
+              <li><strong>Telegram Chat ID:</strong> Message your new bot (to start a chat), then forward a message to <a href="https://t.me/userinfobot" target="_blank" rel="noopener noreferrer">@userinfobot</a> to get your numerical Chat ID.</li>
+            </ol>
+          </div>
+          <form onSubmit={handleSubmit} className="settings-form">
         
         {/* Email Configuration */}
         <fieldset className="settings-section">
@@ -361,6 +371,7 @@ function SettingsModule() {
           </button>
         </div>
       </form>
+      </>
       )}
 
       <div className="settings-info">

@@ -6,20 +6,13 @@ const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === 'dev
 
 function LoginPage() {
   const { login, loading, error } = useAuth();
-  const [activeTab, setActiveTab] = useState('user'); // 'user' or 'admin'
-  const [adminExists, setAdminExists] = useState(false);
+  const [activeTab, setActiveTab] = useState('user'); // 'user' or 'register'
   const [localError, setLocalError] = useState('');
 
   // User Login Form
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
 
-  const [adminForm, setAdminForm] = useState({
-    username: '',
-    password: '',
-    telegram_bot_token: '',
-    telegram_chat_id: '',
-  });
 
   // User Register Form
   const [registerForm, setRegisterForm] = useState({
@@ -28,23 +21,7 @@ function LoginPage() {
   });
   const [successMessage, setSuccessMessage] = useState('');
 
-  // Check if admin exists
-  useEffect(() => {
-    const checkAdmin = async () => {
-      try {
-        const response = await fetch(`${API_BASE}/api/auth/has-admin`);
-        if (response.ok) {
-          const data = await response.json();
-          setAdminExists(data.has_admin);
-        } else {
-          setAdminExists(false);
-        }
-      } catch (err) {
-        setAdminExists(false);
-      }
-    };
-    checkAdmin();
-  }, []);
+
 
   // Handle user login
   const handleUserLogin = async (e) => {
@@ -57,44 +34,7 @@ function LoginPage() {
     }
   };
 
-  // Handle admin setup
-  const handleAdminSetup = async (e) => {
-    e.preventDefault();
-    setLocalError('');
 
-    // Validate required fields
-    if (!adminForm.username || !adminForm.password) {
-      setLocalError('Username and password are required');
-      return;
-    }
-
-    try {
-      const response = await fetch(`${API_BASE}/api/auth/admin-setup`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: adminForm.username,
-          password: adminForm.password,
-          telegram_bot_token: adminForm.telegram_bot_token,
-          telegram_chat_id: adminForm.telegram_chat_id,
-        }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.detail || 'Admin setup failed');
-      }
-
-      const data = await response.json();
-      // Store token and login
-      localStorage.setItem('token', data.access_token);
-      localStorage.setItem('user_id', data.user_id);
-      localStorage.setItem('username', data.username);
-      window.location.href = '/';
-    } catch (err) {
-      setLocalError(err.message || 'Admin setup failed');
-    }
-  };
 
   // Handle user registration
   const handleRegister = async (e) => {
@@ -108,7 +48,7 @@ function LoginPage() {
     }
 
     try {
-      const response = await fetch(`${API_BASE}/api/auth/public-register`, {
+      const response = await fetch(`${API_BASE}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -122,18 +62,13 @@ function LoginPage() {
         throw new Error(data.detail || 'Registration failed');
       }
       
-      setSuccessMessage('Your account has been created. Please wait for the Admin to approve your access before logging in.');
+      setSuccessMessage('Your account has been created. You can now log in.');
       setRegisterForm({ username: '', password: '' });
     } catch (err) {
       setLocalError(err.message || 'Registration failed. Please try again.');
     }
   };
 
-  // Handle admin form changes
-  const handleAdminFormChange = (e) => {
-    const { name, value } = e.target;
-    setAdminForm(prev => ({ ...prev, [name]: value }));
-  };
 
   return (
     <div className="login-page">
@@ -144,29 +79,18 @@ function LoginPage() {
 
           {/* Tabs */}
           <div className="login-tabs">
-            {adminExists ? (
-              <>
-                <button
-                  className={`tab-button ${activeTab === 'user' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('user')}
-                >
-                  👤 Login
-                </button>
-                <button
-                  className={`tab-button ${activeTab === 'register' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('register')}
-                >
-                  📝 Create Account
-                </button>
-              </>
-            ) : (
-              <button
-                className={`tab-button ${activeTab === 'admin' ? 'active' : ''}`}
-                onClick={() => setActiveTab('admin')}
-              >
-                🔧 Admin Setup
-              </button>
-            )}
+            <button
+              className={`tab-button ${activeTab === 'user' ? 'active' : ''}`}
+              onClick={() => setActiveTab('user')}
+            >
+              👤 Login
+            </button>
+            <button
+              className={`tab-button ${activeTab === 'register' ? 'active' : ''}`}
+              onClick={() => setActiveTab('register')}
+            >
+              📝 Create Account
+            </button>
           </div>
 
           {/* User Login Tab */}
@@ -251,95 +175,7 @@ function LoginPage() {
             </form>
           )}
 
-          {/* Admin Setup Tab */}
-          {activeTab === 'admin' && (
-            <form onSubmit={handleAdminSetup}>
-              <p className="admin-subtitle">One-time system configuration</p>
 
-              {/* Basic Info Section */}
-              <fieldset className="form-section">
-                <legend>Basic Account Information</legend>
-
-                <div className="form-row">
-                  <div className="form-group">
-                    <label htmlFor="admin_username">Username</label>
-                    <input
-                      id="admin_username"
-                      type="text"
-                      name="username"
-                      value={adminForm.username}
-                      onChange={handleAdminFormChange}
-                      placeholder="Admin username"
-                      disabled={loading}
-                      autoFocus
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label htmlFor="admin_password">Password</label>
-                  <input
-                    id="admin_password"
-                    type="password"
-                    name="password"
-                    value={adminForm.password}
-                    onChange={handleAdminFormChange}
-                    placeholder="Create a strong password"
-                    disabled={loading}
-                    required
-                  />
-                </div>
-              </fieldset>
-
-              {/* Telegram Configuration Section */}
-              <fieldset className="form-section">
-                <legend>Telegram Bot Integration</legend>
-
-                <div className="form-group">
-                  <label htmlFor="telegram_bot_token">Telegram Bot Token</label>
-                  <input
-                    id="telegram_bot_token"
-                    type="password"
-                    name="telegram_bot_token"
-                    value={adminForm.telegram_bot_token}
-                    onChange={handleAdminFormChange}
-                    placeholder="Your bot token from BotFather"
-                    disabled={loading}
-                    required
-                  />
-                  <small>
-                    Create a bot with <a href="https://t.me/botfather" target="_blank" rel="noopener noreferrer">BotFather</a>
-                  </small>
-                </div>
-
-                <div className="form-group">
-                  <label htmlFor="telegram_chat_id">Telegram Chat ID</label>
-                  <input
-                    id="telegram_chat_id"
-                    type="text"
-                    name="telegram_chat_id"
-                    value={adminForm.telegram_chat_id}
-                    onChange={handleAdminFormChange}
-                    placeholder="Your chat ID"
-                    disabled={loading}
-                    required
-                  />
-                  <small>
-                    Send /start to <a href="https://t.me/userinfobot" target="_blank" rel="noopener noreferrer">@userinfobot</a> to get your ID
-                  </small>
-                </div>
-              </fieldset>
-
-              {(error || localError) && (
-                <div className="error-message">{error || localError}</div>
-              )}
-
-              <button type="submit" disabled={loading} className="login-button">
-                {loading ? 'Setting up...' : 'Complete Admin Setup'}
-              </button>
-            </form>
-          )}
         </div>
       </div>
     </div>

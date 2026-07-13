@@ -4,19 +4,12 @@ import { useWebSocket } from '../context/WebSocketContext';
 import InvoiceModule from '../components/InvoiceModule/InvoiceModule';
 import ProductModule from '../components/ProductModule/ProductModule';
 import SettingsModule from '../components/SettingsModule/SettingsModule';
-import AccountsModule from '../components/AccountsModule/AccountsModule';
 import './Dashboard.css';
 
 function Dashboard() {
   const { user, logout } = useAuth();
   const { isConnected } = useWebSocket();
-  const [activeModule, setActiveModule] = useState(user?.is_admin ? 'accounts' : 'invoices');
-  const [adminTargetUser, setAdminTargetUser] = useState(null);
-
-  const handleSelectAccount = (selectedUser) => {
-    setAdminTargetUser(selectedUser);
-    setActiveModule('invoices');
-  };
+  const [activeModule, setActiveModule] = useState('invoices');
 
   return (
     <div className="dashboard">
@@ -38,34 +31,18 @@ function Dashboard() {
       <div className="dashboard-container">
         <aside className="sidebar">
           <nav className="sidebar-nav">
-            {user?.is_admin && (
-              <button
-                className={`nav-item ${activeModule === 'accounts' ? 'active' : ''}`}
-                onClick={() => {
-                  setActiveModule('accounts');
-                  setAdminTargetUser(null);
-                }}
-              >
-                👥 Accounts
-              </button>
-            )}
-
-            {(!user?.is_admin || adminTargetUser) && (
-              <>
-                <button
-                  className={`nav-item ${activeModule === 'invoices' ? 'active' : ''}`}
-                  onClick={() => setActiveModule('invoices')}
-                >
-                  📄 Invoices {adminTargetUser ? `(${adminTargetUser.username})` : ''}
-                </button>
-                <button
-                  className={`nav-item ${activeModule === 'products' ? 'active' : ''}`}
-                  onClick={() => setActiveModule('products')}
-                >
-                  📦 Products {adminTargetUser ? `(${adminTargetUser.username})` : ''}
-                </button>
-              </>
-            )}
+            <button
+              className={`nav-item ${activeModule === 'invoices' ? 'active' : ''}`}
+              onClick={() => setActiveModule('invoices')}
+            >
+              📄 Invoices
+            </button>
+            <button
+              className={`nav-item ${activeModule === 'products' ? 'active' : ''}`}
+              onClick={() => setActiveModule('products')}
+            >
+              📦 Products
+            </button>
 
             <button
               className={`nav-item ${activeModule === 'settings' ? 'active' : ''}`}
@@ -77,9 +54,8 @@ function Dashboard() {
         </aside>
 
         <main className="dashboard-content">
-          {activeModule === 'accounts' && user?.is_admin && <AccountsModule onSelectAccount={handleSelectAccount} />}
-          {activeModule === 'invoices' && <InvoiceModule adminTargetUser={adminTargetUser} />}
-          {activeModule === 'products' && <ProductModule adminTargetUser={adminTargetUser} />}
+          {activeModule === 'invoices' && <InvoiceModule />}
+          {activeModule === 'products' && <ProductModule />}
           {activeModule === 'settings' && <SettingsModule />}
         </main>
       </div>

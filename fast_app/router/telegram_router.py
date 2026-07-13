@@ -29,25 +29,7 @@ async def telegram_webhook(token: str, request: Request, db: Session = Depends(g
         if not (callback_data and callback_id and chat_id and message_id):
             return {"status": "error", "msg": "Invalid callback payload"}
 
-        if callback_data.startswith("role_"):
-            from telegram_handlers import handle_role_callback
-            return await handle_role_callback(
-                callback_data=callback_data,
-                callback_id=callback_id,
-                chat_id=chat_id,
-                message_id=message_id,
-                db=db,
-            )
-            
-        if callback_data.startswith("approve_user_") or callback_data.startswith("reject_user_"):
-            from telegram_handlers import handle_user_approval_callback
-            return await handle_user_approval_callback(
-                callback_data=callback_data,
-                callback_id=callback_id,
-                chat_id=chat_id,
-                message_id=message_id,
-                db=db,
-            )
+
 
         return await handle_invoice_callback(
             callback_data=callback_data,

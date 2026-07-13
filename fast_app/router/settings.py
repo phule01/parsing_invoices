@@ -19,11 +19,6 @@ router = APIRouter(prefix="/api/settings", tags=["Settings"])
 ENV_FILE = Path(__file__).parent.parent / ".env"
 
 
-def _is_admin(db: Session, user_id: int) -> bool:
-    """Check if user is admin"""
-    user = db.query(User).filter(User.id == user_id).first()
-    return user and user.is_admin
-
 
 class SettingsUpdate:
     """Settings that can be updated"""

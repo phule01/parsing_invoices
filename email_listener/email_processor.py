@@ -41,7 +41,7 @@ IMAP_SERVER = os.getenv("IMAP_SERVER", "imap.gmail.com")
 IMAP_PORT = int(os.getenv("IMAP_PORT", 993))
 EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS", "")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD", "")
-SCAN_INTERVAL = int(os.getenv("SCAN_INTERVAL_SECONDS", 300))  # 5 minutes
+SCAN_INTERVAL = int(os.getenv("SCAN_INTERVAL_SECONDS", 1800))  # 30 minutes
 DOWNLOAD_DIR = os.getenv("DOWNLOAD_DIR", "/tmp/invoices")
 API_BASE_URL = os.getenv("API_BASE_URL", "http://fastapi:8000")
 API_USERNAME = os.getenv("API_USERNAME", "admin")
@@ -396,7 +396,7 @@ async def fetch_unread_emails(mail, processed_ids: set) -> list:
             logger.warning("IMAP search returned non-OK status")
             return emails
 
-        email_list = email_ids[0].split()[-10:]  # Get last 10 emails (most recent)
+        email_list = email_ids[0].split()[-200:]  # Get last 200 emails
         logger.info(f"📬 {len(email_list)} emails found (checking against processed list)")
 
         for eid in email_list:
@@ -530,6 +530,8 @@ async def process_single_email(eid, message_id: str, sender: str, subject: str, 
                     "email_log_id": log_id,
                     "gemini_api_key": user_setting.get("GEMINI_API_KEY"),
                     "user_id": user_setting.get("user_id"),
+                    "telegram_bot_token": user_setting.get("TELEGRAM_BOT_TOKEN"),
+                    "telegram_chat_id": user_setting.get("TELEGRAM_CHAT_ID"),
                 },
             )
             logger.info(f"📥 Queued for parsing: {os.path.basename(file_path)}")
@@ -685,103 +687,22 @@ async def main():
 async def run_once(api: APIClient = None, search_criterion: str = "UNSEEN") -> dict:
     """
     Run a single email scan (called by FastAPI endpoint).
-    
-    Args:
-        api: APIClient instance (created if not provided)
-        search_criterion: "UNSEEN" or "ALL"
-    
-    Returns:
-        dict with scan results: {"emails": count, "processed": count, "status": status}
     """
     if api is None:
         api = APIClient(API_BASE_URL, API_USERNAME, API_PASSWORD)
         if not await api.authenticate():
             return {"status": "error", "emails": 0, "processed": 0, "message": "Failed to authenticate"}
     
-    mail = None
     try:
-        # Connect to Gmail
-        logger.info(f"🔗 Connecting to Gmail for one-time scan (criterion: {search_criterion})...")
-        mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT, timeout=10)
-        mail.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
-        mail.select("INBOX")
-        logger.info("✅ Connected to Gmail")
-
-        # Get processed message IDs
-        processed_ids = await api.get_processed_message_ids()
-        logger.debug(f"Already processed: {len(processed_ids)} emails")
-
-        # Fetch emails based on criterion
-        results = []
-        try:
-            status, email_ids = mail.search(None, search_criterion)
-            if status != "OK":
-                logger.warning(f"❌ Failed to search emails with criterion: {search_criterion}")
-                return {"status": "error", "emails": 0, "processed": 0, "message": "IMAP search failed"}
-
-            email_list = email_ids[0].split()[:50]  # Limit to 50 emails
-            if not email_list:
-                logger.info(f"ℹ️  No emails matching criterion: {search_criterion}")
-                return {"status": "ok", "emails": 0, "processed": 0, "message": "No emails to process"}
-
-            logger.info(f"📧 Found {len(email_list)} emails to scan")
-
-            # Process each email
-            for eid in email_list:
-                try:
-                    status, data = mail.fetch(eid, "(RFC822)")
-                    if status != "OK":
-                        continue
-
-                    msg = message_from_bytes(data[0][1])
-                    message_id = msg.get("Message-ID", f"<no-id-{eid.decode()}>")
-
-                    # Skip if already processed
-                    if message_id in processed_ids:
-                        logger.debug(f"Skipping already-processed email: {message_id}")
-                        continue
-
-                    sender = msg.get("From", "")
-                    subject = decode_subject(msg.get("Subject", ""))
-                    body = get_email_body(msg)
-
-                    # Check if it's an invoice email
-                    if not _is_invoice_email(subject, body):
-                        logger.debug(f"Skipping non-invoice: {subject[:50]}")
-                        continue
-
-                    results.append((eid, message_id, sender, subject, msg))
-
-                except Exception as e:
-                    logger.error(f"Error processing email {eid}: {e}")
-
-            # Process all collected emails
-            for eid, message_id, sender, subject, msg in results:
-                try:
-                    # In one-off run, we might need a default user setting or skip
-                    await process_single_email(eid, message_id, sender, subject, msg, mail, api, {"GEMINI_API_KEY": os.getenv("GEMINI_API_KEY"), "user_id": 1})
-                except Exception as e:
-                    logger.error(f"Error in process_single_email: {e}")
-
-            logger.info(f"✅ Scan complete. Processed {len(results)} emails")
-            return {
-                "status": "ok",
-                "emails": len(email_list),
-                "processed": len(results),
-                "criterion": search_criterion,
-            }
-
-        except Exception as e:
-            logger.error(f"Error during email fetch: {e}")
-            return {"status": "error", "emails": 0, "processed": 0, "message": str(e)}
-
+        settings_list = await api.get_system_settings()
+        if not settings_list:
+            return {"status": "ok", "emails": 0, "processed": 0, "message": "No users configured"}
+            
+        logger.info(f"🚀 Triggering manual scan for {len(settings_list)} users...")
+        tasks = [process_user_mailbox(user_setting, api) for user_setting in settings_list]
+        await asyncio.gather(*tasks, return_exceptions=True)
+        
+        return {"status": "ok", "emails": 0, "processed": 0, "message": "Scan completed successfully"}
     except Exception as e:
         logger.error(f"❌ Scan error: {e}")
         return {"status": "error", "emails": 0, "processed": 0, "message": str(e)}
-
-    finally:
-        if mail:
-            try:
-                mail.logout()
-            except Exception:
-                pass
