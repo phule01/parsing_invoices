@@ -43,9 +43,33 @@ from app.services.telegram_service import (
     send_invoice_approval_request,
 )
 from app.services.invoice_service import InvoiceService, ProductUpdate
+from app.services.mysql_sync import sync_invoice_to_mysql
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/invoices", tags=["invoices"])
+
+def _invoice_to_dict(invoice: Invoice) -> dict:
+    """Helper to convert Invoice SQLAlchemy object to dict for background tasks."""
+    return {
+        "id": invoice.id,
+        "invoice_number": invoice.invoice_number,
+        "invoice_series": invoice.invoice_series,
+        "invoice_date": invoice.invoice_date,
+        "seller_name": invoice.seller_name,
+        "buyer_name": invoice.buyer_name,
+        "total_amount": float(invoice.total_amount) if invoice.total_amount is not None else 0,
+        "status": invoice.status,
+        "items": [
+            {
+                "id": item.id,
+                "item_name": item.item_name,
+                "quantity": float(item.quantity) if item.quantity is not None else 0,
+                "unit_price": float(item.unit_price) if item.unit_price is not None else 0,
+                "total_price": float(item.total_price) if item.total_price is not None else 0
+            }
+            for item in getattr(invoice, 'items', [])
+        ]
+    }
 
 
 # ── Shared dependency ─────────────────────────────────────────────────────────
@@ -335,6 +359,7 @@ async def create_invoice(
         items=items_payload,
         raw_file_path=db_invoice.raw_file_path,
     )
+    background_tasks.add_task(sync_invoice_to_mysql, _invoice_to_dict(db_invoice))
 
     return db_invoice
 
@@ -345,6 +370,7 @@ async def create_invoice(
 async def update_invoice(
     invoice_id: int,
     invoice_data: InvoiceUpdate,
+    background_tasks: BackgroundTasks,
     user_id: int = Depends(_current_user_id),
     db: Session = Depends(get_db),
 ):
@@ -375,6 +401,7 @@ async def update_invoice(
 
     db.commit()
     db.refresh(invoice)
+    background_tasks.add_task(sync_invoice_to_mysql, _invoice_to_dict(invoice))
     return invoice
 
 
@@ -409,6 +436,7 @@ async def approve_invoice(
         result.invoice.id,
         result.product_updates,
     )
+    background_tasks.add_task(sync_invoice_to_mysql, _invoice_to_dict(result.invoice))
     return {
         "status": "success",
         "message": result.message,
@@ -453,6 +481,7 @@ async def reject_invoice(
         result.invoice.invoice_number,
         result.invoice.id,
     )
+    background_tasks.add_task(sync_invoice_to_mysql, _invoice_to_dict(result.invoice))
     return {"status": "success", "message": result.message}
 
 
