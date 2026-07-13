@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS products (
     category VARCHAR(100),
     supplier VARCHAR(200),
     image_url TEXT,
+    user_id INT REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -87,6 +88,7 @@ CREATE TABLE IF NOT EXISTS invoices (
     source_email VARCHAR(255),
     source_type VARCHAR(50),  -- email_attachment, email_link, portal_download
     raw_file_path TEXT,  -- Path to original PDF/XML
+    telegram_file_id VARCHAR(255), -- Telegram CDN file ID
     file_format VARCHAR(20),  -- pdf, xml
     ai_confidence DECIMAL(5, 2) DEFAULT 0,  -- 0-100 confidence score
     

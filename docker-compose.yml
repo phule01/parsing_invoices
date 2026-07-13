@@ -68,7 +68,7 @@ services:
       - tool_orc_network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -195,6 +195,3 @@ volumes:
 networks:
   tool_orc_network:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.25.0.0/16
