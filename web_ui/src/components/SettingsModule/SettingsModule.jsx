@@ -10,17 +10,18 @@ function SettingsModule() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [testInProgress, setTestInProgress] = useState('');
-  
+
   // User Management State
   const [newUser, setNewUser] = useState({ username: '', password: '' });
   const [userLoading, setUserLoading] = useState(false);
   const [userSuccess, setUserSuccess] = useState('');
   const [userError, setUserError] = useState('');
-  
+
   // Pending Approvals State
   const [pendingUsers, setPendingUsers] = useState([]);
   const [approvalLoading, setApprovalLoading] = useState(false);
 
+  const [useCustomGemini, setUseCustomGemini] = useState(false);
   const [settings, setSettings] = useState({
     EMAIL_ADDRESS: '',
     EMAIL_PASSWORD: '',
@@ -39,6 +40,9 @@ function SettingsModule() {
 
         const data = await response.json();
         setSettings(data);
+        if (data.GEMINI_API_KEY) {
+          setUseCustomGemini(true);
+        }
       } catch (err) {
         setError(err.message);
       }
@@ -116,7 +120,7 @@ function SettingsModule() {
     try {
       const response = await fetch(`${API_BASE}/api/settings/test-email`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
@@ -154,7 +158,7 @@ function SettingsModule() {
     try {
       const response = await fetch(`${API_BASE}/api/settings/test-telegram`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
@@ -251,7 +255,7 @@ function SettingsModule() {
     }
   };
 
-        {/* Admin Section is now just for User Management, handled below */}
+  {/* Admin Section is now just for User Management, handled below */ }
 
 
 
@@ -263,19 +267,18 @@ function SettingsModule() {
       {error && <div className="error-message">{error}</div>}
       {success && <div className="success-message">{success}</div>}
 
-      {!user?.is_admin && (
-        <>
-          <div className="settings-guide" style={{ background: '#f8f9fa', padding: '20px', borderRadius: '10px', marginBottom: '25px', borderLeft: '5px solid #007bff', boxShadow: '0 2px 5px rgba(0,0,0,0.05)' }}>
-            <h3 style={{ margin: '0 0 15px 0', color: '#333' }}>📖 Quick Setup Guide</h3>
-            <ol style={{ margin: 0, paddingLeft: '25px', lineHeight: '1.7', color: '#555' }}>
-              <li><strong>Email Password:</strong> Generate a 16-character <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer">Google App Password</a>. Do not use your regular Gmail password.</li>
-              <li><strong>Gemini API Key:</strong> Get your free AI key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio</a>.</li>
-              <li><strong>Telegram Bot Token:</strong> Message <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer">@BotFather</a> on Telegram, create a new bot (<code>/newbot</code>), and copy the HTTP API Token.</li>
-              <li><strong>Telegram Chat ID:</strong> Message your new bot (to start a chat), then forward a message to <a href="https://t.me/userinfobot" target="_blank" rel="noopener noreferrer">@userinfobot</a> to get your numerical Chat ID.</li>
-            </ol>
-          </div>
-          <form onSubmit={handleSubmit} className="settings-form">
-        
+
+      <div className="settings-guide" style={{ background: '#f8f9fa', padding: '20px', borderRadius: '10px', marginBottom: '25px', borderLeft: '5px solid #007bff', boxShadow: '0 2px 5px rgba(0,0,0,0.05)' }}>
+        <h3 style={{ margin: '0 0 15px 0', color: '#333' }}>📖 Quick Setup Guide</h3>
+        <ol style={{ margin: 0, paddingLeft: '25px', lineHeight: '1.7', color: '#555' }}>
+          <li><strong>Email Password:</strong> Generate a 16-character <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer">Google App Password</a>. Do not use your regular Gmail password.</li>
+
+          <li><strong>Telegram Bot Token:</strong> Message <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer">@BotFather</a> on Telegram, create a new bot (<code>/newbot</code>), and copy the HTTP API Token.</li>
+          <li><strong>Telegram Chat ID:</strong> Message your new bot (to start a chat), then forward a message to <a href="https://t.me/userinfobot" target="_blank" rel="noopener noreferrer">@userinfobot</a> to get your numerical Chat ID.</li>
+        </ol>
+      </div>
+      <form onSubmit={handleSubmit} className="settings-form">
+
         {/* Email Configuration */}
         <fieldset className="settings-section">
           <legend>📧 Email Configuration (Gmail)</legend>
@@ -302,29 +305,10 @@ function SettingsModule() {
               placeholder="••••••••••••••••"
             />
           </div>
-          <div className="form-actions" style={{marginTop: '10px'}}>
+          <div className="form-actions" style={{ marginTop: '10px' }}>
             <button type="button" onClick={handleTestEmail} disabled={!!testInProgress} className="btn-secondary">
               {testInProgress === 'email' ? '⏳ Testing...' : '🧪 Test Email Connection'}
             </button>
-          </div>
-        </fieldset>
-
-        {/* AI Configuration */}
-        <fieldset className="settings-section">
-          <legend>🤖 AI Parser Configuration (Google Gemini)</legend>
-          <div className="form-group">
-            <label htmlFor="GEMINI_API_KEY">Gemini API Key</label>
-            <input
-              id="GEMINI_API_KEY"
-              type="password"
-              name="GEMINI_API_KEY"
-              value={settings.GEMINI_API_KEY || ''}
-              onChange={handleChange}
-              placeholder="••••••••••••••••••••••••••••"
-            />
-            <small>
-              Your personal Gemini API key for invoice parsing
-            </small>
           </div>
         </fieldset>
 
@@ -343,7 +327,7 @@ function SettingsModule() {
             />
             <small>Your personal Telegram Bot token</small>
           </div>
-          
+
           <div className="form-group">
             <label htmlFor="TELEGRAM_CHAT_ID">Telegram Chat ID</label>
             <input
@@ -357,12 +341,35 @@ function SettingsModule() {
             <small>Your personal Chat ID to receive approval requests from your bot.</small>
           </div>
 
-          <div className="form-actions" style={{marginTop: '10px'}}>
+          <div className="form-actions" style={{ marginTop: '10px' }}>
             <button type="button" onClick={handleTestTelegram} disabled={!!testInProgress} className="btn-secondary">
               {testInProgress === 'telegram' ? '⏳ Testing...' : '🧪 Test Telegram Message'}
             </button>
           </div>
         </fieldset>
+
+        {/* AI Configuration */}
+        <details className="settings-section" style={{ padding: '15px', border: '1px solid #ddd', borderRadius: '8px', marginBottom: '20px' }}>
+          <summary style={{ cursor: 'pointer', fontWeight: 'bold', fontSize: '1.1em', userSelect: 'none' }}>
+            🤖 AI Parser Configuration (Advanced)
+          </summary>
+          <div style={{ marginTop: '20px' }}>
+            <div className="form-group" style={{ marginTop: '5px' }}>
+              <label htmlFor="GEMINI_API_KEY">Gemini API Key</label>
+              <input
+                id="GEMINI_API_KEY"
+                type="password"
+                name="GEMINI_API_KEY"
+                value={settings.GEMINI_API_KEY || ''}
+                onChange={handleChange}
+                placeholder="••••••••••••••••••••••••••••"
+              />
+              <small>
+                Your personal Gemini API key for invoice parsing. Leave blank to use the system default.
+              </small>
+            </div>
+          </div>
+        </details>
 
         {/* Submit Button */}
         <div className="form-actions">
@@ -371,104 +378,14 @@ function SettingsModule() {
           </button>
         </div>
       </form>
-      </>
-      )}
+
 
       <div className="settings-info">
         <h3>ℹ️ Important Notes</h3>
         <ul>
-          {!user?.is_admin && <li>✅ Integration settings (Email, API, Telegram) are personal to your account.</li>}
-          {user?.is_admin && <li>📋 As an Admin, you can only manage user accounts. Integration settings are handled by individual users.</li>}
+          <li>✅ Integration settings (Email, API, Telegram) are personal to your account.</li>
         </ul>
       </div>
-
-      {user?.is_admin && (
-        <>
-          <hr style={{margin: '40px 0', border: '1px solid #eee'}} />
-
-          <h2>👥 User Management</h2>
-          <p className="admin-only">👤 Admin only - Create standard user accounts</p>
-
-          {userError && <div className="error-message">{userError}</div>}
-          {userSuccess && <div className="success-message">{userSuccess}</div>}
-
-          <form onSubmit={handleCreateUser} className="settings-form">
-            <fieldset className="settings-section">
-              <legend>➕ Add New User</legend>
-
-              <div className="form-group">
-                <label htmlFor="new_username">Username</label>
-                <input
-                  id="new_username"
-                  type="text"
-                  value={newUser.username}
-                  onChange={(e) => setNewUser({...newUser, username: e.target.value})}
-                  placeholder="Username"
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="new_password">Password</label>
-                <input
-                  id="new_password"
-                  type="password"
-                  value={newUser.password}
-                  onChange={(e) => setNewUser({...newUser, password: e.target.value})}
-                  placeholder="••••••••"
-                  required
-                />
-              </div>
-
-              <div className="form-actions">
-                <button type="submit" disabled={userLoading} className="btn-primary">
-                  {userLoading ? '⏳ Creating...' : '➕ Create User'}
-                </button>
-              </div>
-            </fieldset>
-          </form>
-
-          {/* Pending Approvals */}
-          <h3 style={{marginTop: '30px'}}>⏳ Pending Approvals</h3>
-          <p className="admin-only" style={{marginBottom: '15px'}}>Approve users who registered via the Web UI.</p>
-          
-          {pendingUsers.length === 0 ? (
-            <div className="info-message">No pending user registrations.</div>
-          ) : (
-            <div className="pending-users-list">
-              {pendingUsers.map(u => (
-                <div key={u.id} className="pending-user-card" style={{
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  padding: '15px', border: '1px solid #ddd', borderRadius: '8px', marginBottom: '10px'
-                }}>
-                  <div>
-                    <strong>{u.username}</strong>
-                    <div style={{fontSize: '0.85em', color: '#666'}}>
-                      Requested: {new Date(u.created_at).toLocaleString()}
-                    </div>
-                  </div>
-                  <div style={{display: 'flex', gap: '10px'}}>
-                    <button 
-                      onClick={() => handleApproveUser(u.id)}
-                      disabled={approvalLoading}
-                      style={{padding: '6px 12px', background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer'}}
-                    >
-                      ✅ Approve
-                    </button>
-                    <button 
-                      onClick={() => handleRejectUser(u.id)}
-                      disabled={approvalLoading}
-                      style={{padding: '6px 12px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer'}}
-                    >
-                      ❌ Reject
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </>
-      )}
 
     </div>
   );

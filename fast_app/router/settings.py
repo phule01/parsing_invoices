@@ -66,7 +66,7 @@ async def get_system_settings(request: Request, db: Session = Depends(get_db)):
             "user_id": user.id,
             "EMAIL_ADDRESS": user.email or "",
             "EMAIL_PASSWORD": user.email_password or "",
-            "GEMINI_API_KEY": user.gemini_api_key or "",
+            "GEMINI_API_KEY": user.gemini_api_key or os.getenv("GEMINI_API_KEY", ""),
             "TELEGRAM_BOT_TOKEN": user.telegram_bot_token or "",
             "TELEGRAM_CHAT_ID": user.telegram_chat_id or "",
             "IMAP_SERVER": user.imap_server or os.getenv("IMAP_SERVER", "imap.gmail.com"),

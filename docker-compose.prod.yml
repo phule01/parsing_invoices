@@ -29,32 +29,6 @@ services:
         max-size: "10m"
         max-file: "5"
 
-  mysql_db:
-    image: mysql:8.0
-    container_name: tool_orc_mysql_prod
-    environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:-mysql}
-      MYSQL_DATABASE: ${MYSQL_DB:-tool_orc_sync_db}
-      MYSQL_USER: ${MYSQL_USER:-mysql}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-mysql}
-    ports:
-      - "0.0.0.0:13601:3306"
-    volumes:
-      - mysql_data_prod:/var/lib/mysql
-    networks:
-      - tool_orc_network
-    restart: always
-    healthcheck:
-      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
 
   fastapi:
     build:
@@ -183,8 +157,6 @@ volumes:
   postgres_data_prod:
     driver: local
   invoice_files_prod:
-    driver: local
-  mysql_data_prod:
     driver: local
 
 networks:

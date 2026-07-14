@@ -43,7 +43,7 @@ from app.services.telegram_service import (
     send_invoice_approval_request,
 )
 from app.services.invoice_service import InvoiceService, ProductUpdate
-from app.services.mysql_sync import sync_invoice_to_mysql
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/invoices", tags=["invoices"])
@@ -79,11 +79,9 @@ def _current_user_data(request: Request, db: Session = Depends(get_db)) -> dict:
     from app.core.security import SECRET_KEY
     internal_secret = request.headers.get("X-Internal-Secret")
     if internal_secret and internal_secret == SECRET_KEY:
-        from models import User
-        owner = db.query(User).filter(User.is_active == True).first()
-        if owner:
-            return {"user_id": owner.id, "username": owner.username, "is_admin": owner.is_admin}
-        raise HTTPException(status_code=500, detail="No active users found for internal task.")
+        # Microservice requests bypass authentication and act as a system admin 
+        # so they can assign invoices to any specific user ID.
+        return {"user_id": 1, "username": "system_service", "is_admin": True}
 
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
@@ -381,7 +379,7 @@ async def create_invoice(
         items=items_payload,
         raw_file_path=db_invoice.raw_file_path,
     )
-    background_tasks.add_task(sync_invoice_to_mysql, _invoice_to_dict(db_invoice))
+    # MySQL sync removed
 
     return db_invoice
 
@@ -423,7 +421,7 @@ async def update_invoice(
 
     db.commit()
     db.refresh(invoice)
-    background_tasks.add_task(sync_invoice_to_mysql, _invoice_to_dict(invoice))
+    # MySQL sync removed
     return invoice
 
 
@@ -458,7 +456,7 @@ async def approve_invoice(
         result.invoice.id,
         result.product_updates,
     )
-    background_tasks.add_task(sync_invoice_to_mysql, _invoice_to_dict(result.invoice))
+    # MySQL sync removed
     return {
         "status": "success",
         "message": result.message,
@@ -503,7 +501,7 @@ async def reject_invoice(
         result.invoice.invoice_number,
         result.invoice.id,
     )
-    background_tasks.add_task(sync_invoice_to_mysql, _invoice_to_dict(result.invoice))
+    # MySQL sync removed
     return {"status": "success", "message": result.message}
 
 
