@@ -20,7 +20,7 @@ import logging
 
 from sqlalchemy.orm import Session
 
-from models import Invoice, Product, InventoryAuditLog
+from models import Invoice, Product, InventoryAuditLog, EmailLog
 
 logger = logging.getLogger(__name__)
 
@@ -163,6 +163,12 @@ class InvoiceService:
             reverted = self._revert_inventory(invoice)
 
         invoice_number = invoice.invoice_number
+        
+        # If the invoice came from an email, delete its log to allow re-scanning
+        if invoice.source_type == "email" and invoice.source_email:
+            self._db.query(EmailLog).filter(EmailLog.message_id == invoice.source_email).delete()
+            logger.info("Deleted email log for message %s to allow re-scanning", invoice.source_email)
+            
         self._db.delete(invoice)
         self._db.commit()
 

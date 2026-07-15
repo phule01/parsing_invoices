@@ -337,6 +337,7 @@ async def send_invoice_notification(invoice_data: dict) -> bool:
         "vat_amount": invoice_data.get("vat_amount", 0),
         "total_amount": invoice_data.get("total_amount", 0),
         "source_type": "email",
+        "source_email": invoice_data.get("_metadata", {}).get("message_id"),
         "raw_file_path": invoice_data.get("_file_path"),
         "items": invoice_data.get("items", []),
         "user_id": invoice_data.get("_metadata", {}).get("user_id"),

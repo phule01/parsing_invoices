@@ -55,9 +55,15 @@ export function WebSocketProvider({ children }) {
           setIsConnected(false);
         };
 
-        websocket.onclose = () => {
-          console.log('WebSocket disconnected');
+        websocket.onclose = (event) => {
+          console.log(`WebSocket disconnected (code: ${event.code})`);
           setIsConnected(false);
+          
+          // Stop reconnect loop if auth failed (1008 Policy Violation)
+          if (event.code === 1008) {
+            console.error('WebSocket auth failed. Stopping reconnect loop.');
+            return;
+          }
           
           // Try to reconnect after 5 seconds
           setTimeout(connectWebSocket, 5000);
