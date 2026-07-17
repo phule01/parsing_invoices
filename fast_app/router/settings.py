@@ -121,7 +121,7 @@ async def update_settings(
                         async with httpx.AsyncClient(timeout=10) as client:
                             resp = await client.post(
                                 f"{TELEGRAM_API_URL}/bot{data['TELEGRAM_BOT_TOKEN']}/setWebhook",
-                                json={"url": f"{webhook_url}/{data['TELEGRAM_BOT_TOKEN']}"},
+                                json={"url": f"{webhook_url.rstrip('/')}/webhook/{data['TELEGRAM_BOT_TOKEN']}"},
                             )
                             logger.info(f"Dynamic webhook re-registration from settings: {resp.text}")
                     except Exception as ex:

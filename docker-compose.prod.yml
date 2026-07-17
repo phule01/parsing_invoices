@@ -51,6 +51,7 @@ services:
         condition: service_healthy
     volumes:
       - ./.env:/app/.env
+      - invoice_files_prod:/app/invoices
     networks:
       - tool_orc_network
     restart: always
