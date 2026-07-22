@@ -133,7 +133,7 @@ class APIClient:
                 if resp.status_code in (200, 201):
                     logger.info(f"✅ Invoice created: {invoice_data.get('invoice_number')}")
                     return resp.json()
-                if resp.status_code == 400 and "already exists" in resp.text:
+                if resp.status_code in (400, 409) and ("already exists" in resp.text or "Conflict" in resp.text):
                     logger.info(f"ℹ️  Invoice already exists: {invoice_data.get('invoice_number')}")
                     return None
                 logger.error(f"❌ Create invoice failed [{resp.status_code}]: {resp.text}")
@@ -461,9 +461,10 @@ def _check_and_store_file_hash(file_path: str) -> bool:
     import hashlib
     import json
     
-    hash_file = "/app/invoices/processed_hashes.json"
+    hash_file = os.getenv("PROCESSED_HASHES_FILE", "/app/invoices/processed_hashes.json")
     
     try:
+        os.makedirs(os.path.dirname(hash_file), exist_ok=True)
         sha256_hash = hashlib.sha256()
         with open(file_path, "rb") as f:
             for byte_block in iter(lambda: f.read(4096), b""):
@@ -487,7 +488,7 @@ def _check_and_store_file_hash(file_path: str) -> bool:
             
         return False
     except Exception as e:
-        logger.error(f"Error in file hashing: {e}")
+        logger.error(f"Error in file hashing for {file_path}: {e}")
         return False
 
 async def process_single_email(eid, message_id: str, sender: str, subject: str, msg, mail, api: APIClient, user_setting: dict):
@@ -549,8 +550,8 @@ async def process_user_mailbox(user_setting: dict, api: APIClient):
     gemini_key = user_setting.get("GEMINI_API_KEY", "")
     bot_token = user_setting.get("TELEGRAM_BOT_TOKEN", "")
     chat_id = user_setting.get("TELEGRAM_CHAT_ID", "")
-    email_pass = user_setting.get("EMAIL_PASSWORD", "")
-    email_addr = user_setting.get("EMAIL_ADDRESS", "")
+    email_pass = user_setting.get("EMAIL_PASSWORD", "").replace(" ", "").strip()
+    email_addr = user_setting.get("EMAIL_ADDRESS", "").strip()
     imap_server = user_setting.get("IMAP_SERVER", "imap.gmail.com")
     imap_port = int(user_setting.get("IMAP_PORT", 993))
     

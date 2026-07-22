@@ -302,7 +302,7 @@ function SettingsModule() {
               name="EMAIL_PASSWORD"
               value={settings.EMAIL_PASSWORD || ''}
               onChange={handleChange}
-              placeholder="••••••••••••••••"
+              placeholder={settings.HAS_EMAIL_PASSWORD ? "•••••••• (Saved - leave empty to keep)" : "16-character Google App Password"}
             />
           </div>
           <div className="form-actions" style={{ marginTop: '10px' }}>

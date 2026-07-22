@@ -43,6 +43,7 @@ async def get_settings(request: Request, db: Session = Depends(get_db)):
         
     return {
         "EMAIL_ADDRESS": current_user.email or "",
+        "HAS_EMAIL_PASSWORD": bool(current_user.email_password),
         "GEMINI_API_KEY": current_user.gemini_api_key or "",
         "TELEGRAM_BOT_TOKEN": current_user.telegram_bot_token or "",
         "TELEGRAM_CHAT_ID": current_user.telegram_chat_id or "",
@@ -95,9 +96,10 @@ async def update_settings(
         
     try:
         if "EMAIL_ADDRESS" in data:
-            current_user.email = data["EMAIL_ADDRESS"]
+            current_user.email = (data["EMAIL_ADDRESS"] or "").strip()
         if "EMAIL_PASSWORD" in data and data["EMAIL_PASSWORD"]:
-            current_user.email_password = data["EMAIL_PASSWORD"]
+            # Remove spaces from Google App Password (e.g. 'abcd efgh ijkl mnop' -> 'abcdefghijklmnop')
+            current_user.email_password = data["EMAIL_PASSWORD"].replace(" ", "").strip()
         if "GEMINI_API_KEY" in data:
             current_user.gemini_api_key = data["GEMINI_API_KEY"]
         if "TELEGRAM_BOT_TOKEN" in data:
@@ -188,9 +190,9 @@ async def test_telegram(
 
 
 class TestEmailRequest(BaseModel):
-    target_email: str
-    email_address: str
-    email_password: str
+    target_email: str = None
+    email_address: str = None
+    email_password: str = None
     smtp_server: str = "smtp.gmail.com"
 
 @router.post("/test-email")
@@ -199,7 +201,7 @@ async def test_email(
     request: Request,
     db: Session = Depends(get_db)
 ):
-    """Send test email using provided credentials (admins only)"""
+    """Send test email using provided or saved credentials"""
     from app.core.security import get_token_from_request, decode_token
     import smtplib
     from email.mime.text import MIMEText
@@ -208,27 +210,55 @@ async def test_email(
     token = get_token_from_request(request)
     decoded = decode_token(token)
     
-    # Any user can test their own email
+    current_user = db.query(User).filter(User.id == decoded["user_id"]).first()
+    if not current_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # 1. Determine email address
+    sender_email = (payload.email_address or current_user.email or "").strip()
+    if not sender_email:
+        raise HTTPException(status_code=400, detail="Email address is required.")
+
+    # 2. Determine email password (fallback to DB if payload password is blank)
+    raw_password = (payload.email_password or "").strip()
+    if not raw_password and current_user.email_password:
+        raw_password = current_user.email_password
+        
+    if not raw_password:
+        raise HTTPException(
+            status_code=400,
+            detail="No App Password provided and no password saved in database. Please enter your Google App Password."
+        )
+    
+    # Clean App Password (remove spaces)
+    clean_password = raw_password.replace(" ", "").strip()
+    target = (payload.target_email or sender_email).strip()
     
     try:
-        # Default port 587
         smtp_port = 587
+        smtp_server = payload.smtp_server or current_user.smtp_server or "smtp.gmail.com"
         
         msg = MIMEMultipart()
-        msg["From"] = payload.email_address
-        msg["To"] = payload.target_email
+        msg["From"] = sender_email
+        msg["To"] = target
         msg["Subject"] = "Test Email from Invoice System"
         
-        body = "This is a test email to verify your temporary email configuration is working correctly!"
+        body = "This is a test email to verify your email configuration is working correctly!"
         msg.attach(MIMEText(body, "plain"))
         
-        with smtplib.SMTP(payload.smtp_server, smtp_port) as server:
+        with smtplib.SMTP(smtp_server, smtp_port) as server:
             server.starttls()
-            server.login(payload.email_address, payload.email_password)
+            server.login(sender_email, clean_password)
             server.send_message(msg)
         
-        logger.info(f"✅ Test email sent to {payload.target_email}")
-        return {"status": "success", "message": f"Test email sent to {payload.target_email}"}
+        logger.info(f"✅ Test email sent to {target}")
+        return {"status": "success", "message": f"Test email sent successfully to {target}"}
+    except smtplib.SMTPAuthenticationError as auth_err:
+        logger.error(f"SMTP Auth Error for {sender_email}: {auth_err}")
+        raise HTTPException(
+            status_code=400,
+            detail="Google App Password rejected (535 Bad Credentials). Ensure 2-Step Verification is ON in Gmail and generate a 16-character App Password without typos."
+        )
     except Exception as e:
         logger.error(f"Error sending test email: {e}")
         raise HTTPException(

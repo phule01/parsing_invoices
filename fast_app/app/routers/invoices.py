@@ -292,20 +292,31 @@ async def create_invoice(
         final_user_id = invoice_data.user_id
     else:
         final_user_id = user_id
+    # Build full invoice number string if series exists, otherwise use invoice number
     full_number = (
         f"{invoice_data.invoice_series}/{invoice_data.invoice_number}"
         if invoice_data.invoice_series
-        else None
+        else invoice_data.invoice_number
     )
-    if full_number:
-        existing = db.query(Invoice).filter(
-            Invoice.full_invoice_number == full_number
-        ).first()
-        if existing:
-            raise HTTPException(
-                status_code=409,
-                detail=f"Invoice {full_number} already exists",
-            )
+    
+    # Check if duplicate invoice exists for this user
+    dup_query = db.query(Invoice).filter(
+        Invoice.user_id == final_user_id,
+        Invoice.invoice_number == invoice_data.invoice_number,
+    )
+    if invoice_data.invoice_series:
+        dup_query = dup_query.filter(Invoice.invoice_series == invoice_data.invoice_series)
+    if invoice_data.seller_tax_code:
+        dup_query = dup_query.filter(Invoice.seller_tax_code == invoice_data.seller_tax_code)
+    elif invoice_data.seller_name:
+        dup_query = dup_query.filter(Invoice.seller_name == invoice_data.seller_name)
+
+    existing = dup_query.first()
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Invoice {full_number} already exists",
+        )
 
     total_before_tax = invoice_data.total_before_tax or sum(
         i.quantity * i.unit_price for i in invoice_data.items
