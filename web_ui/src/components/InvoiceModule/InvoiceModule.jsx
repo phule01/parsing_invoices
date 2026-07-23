@@ -266,6 +266,8 @@ function InvoiceModule({ adminTargetUser }) {
           <table className="invoices-table">
             <thead>
               <tr>
+                <th>Lookup Code</th>
+                <th>Series</th>
                 <th>Invoice #</th>
                 <th>Date</th>
                 <th>Buyer</th>
@@ -277,6 +279,8 @@ function InvoiceModule({ adminTargetUser }) {
             <tbody>
               {invoices.map((invoice) => (
                 <tr key={invoice.id} className={`status-${invoice.status}`}>
+                  <td><code>{invoice.lookup_code || '—'}</code></td>
+                  <td>{invoice.invoice_series || '—'}</td>
                   <td><strong>{invoice.invoice_number}</strong></td>
                   <td>{invoice.invoice_date ? new Date(invoice.invoice_date).toLocaleDateString() : '—'}</td>
                   <td>{invoice.buyer_name}</td>

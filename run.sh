@@ -116,8 +116,13 @@ echo ""
 
 # ── Open browser ──────────────────────────────────────────────────────────────
 sleep 1
+URL="http://localhost:${NGINX_PORT}"
 if [[ "${OSTYPE:-}" == darwin* ]]; then
-  open "http://localhost:${NGINX_PORT}" 2>/dev/null || true
+  open "$URL" 2>/dev/null || true
 elif command -v xdg-open &>/dev/null; then
-  xdg-open "http://localhost:${NGINX_PORT}" 2>/dev/null || true
+  if [ -n "${SUDO_USER:-}" ]; then
+    sudo -u "$SUDO_USER" DISPLAY="${DISPLAY:-:0}" DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-}" xdg-open "$URL" 2>/dev/null || true
+  else
+    xdg-open "$URL" 2>/dev/null || true
+  fi
 fi

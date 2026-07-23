@@ -101,9 +101,9 @@ async def parse_invoice_file(file_path: str, metadata: Dict[str, Any] = None) ->
     prompt = """Trích xuất hóa đơn từ tài liệu và trả về dữ liệu dưới dạng JSON cấu trúc.
 Các trường cần thiết:
 {
+  "lookup_code": "Mã tra cứu (nếu có)",
   "invoice_series": "Ký hiệu hóa đơn (e.g., 1C26TBN)",
   "invoice_number": "Số hóa đơn (e.g., 00000014)",
-  "lookup_code": "Mã tra cứu (nếu có)",
   "tax_authority_code": "Mã CQ Thuế (nếu có)",
   "invoice_date": "Ngày hóa đơn (YYYY-MM-DD)",
   "seller": {

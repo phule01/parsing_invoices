@@ -93,6 +93,23 @@ async def update_settings(
     current_user = db.query(User).filter(User.id == decoded["user_id"]).first()
     if not current_user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    # Validate required fields
+    email_addr = (data.get("EMAIL_ADDRESS") or "").strip()
+    if not email_addr:
+        raise HTTPException(status_code=400, detail="Email Address is required.")
+
+    has_pass = bool(current_user.email_password) or bool((data.get("EMAIL_PASSWORD") or "").strip())
+    if not has_pass:
+        raise HTTPException(status_code=400, detail="Email App Password is required.")
+
+    bot_token = (data.get("TELEGRAM_BOT_TOKEN") or "").strip()
+    if not bot_token:
+        raise HTTPException(status_code=400, detail="Telegram Bot Token is required.")
+
+    chat_id = (data.get("TELEGRAM_CHAT_ID") or "").strip()
+    if not chat_id:
+        raise HTTPException(status_code=400, detail="Telegram Chat ID is required.")
         
     try:
         if "EMAIL_ADDRESS" in data:

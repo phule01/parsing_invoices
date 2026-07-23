@@ -88,10 +88,52 @@ def _extract_zip(zip_path: str, extract_dir: str) -> list[str]:
     return extracted
 
 
+def filter_email_attachments(all_files: list[str]) -> list[str]:
+    """
+    Smart attachment filter for multi-file emails (e.g. forwarded emails with 8+ files):
+    Pairs XML and PDF/Image files by invoice filename stem.
+    - If both stem.xml and stem.pdf exist for an invoice stem, pick stem.xml (skip stem.pdf).
+    - If stem.pdf has no corresponding stem.xml, KEEP stem.pdf so no invoices are lost!
+    """
+    if not all_files:
+        return []
+
+    import re
+    from pathlib import Path
+
+    # Map cleaned stem -> dict of extension -> filepath
+    stem_map = {}
+    for filepath in all_files:
+        p = Path(filepath)
+        stem = p.stem.lower()
+        ext = p.suffix.lower()
+
+        # Remove auto-appended timestamp suffixes (e.g., _12345) to group files from same attachment
+        clean_stem = re.sub(r'_\d{4,6}$', '', stem)
+
+        if clean_stem not in stem_map:
+            stem_map[clean_stem] = {}
+        stem_map[clean_stem][ext] = filepath
+
+    selected = []
+    for clean_stem, exts in stem_map.items():
+        if ".xml" in exts:
+            selected.append(exts[".xml"])
+            logger.info(f"⚡ [Stem: {clean_stem}] Selected XML over PDF/images")
+        elif ".pdf" in exts:
+            selected.append(exts[".pdf"])
+            logger.info(f"📄 [Stem: {clean_stem}] Selected PDF")
+        else:
+            # Other image formats (png, jpg, etc.)
+            selected.extend(exts.values())
+
+    return selected
+
+
 def extract_attachments_from_email(msg: Message, message_id: str) -> list[str]:
     """
     Trích xuất tất cả file PDF/XML từ một email.
-    Trả về list đường dẫn file đã lưu.
+    Trả về list đường dẫn file đã lưu (với XML được ưu tiên hàng đầu).
     """
     # Create sanitized directory name from message_id
     safe_dir_name = message_id.replace("<", "").replace(">", "").replace("/", "_")[:50]
@@ -178,8 +220,9 @@ def extract_attachments_from_email(msg: Message, message_id: str) -> list[str]:
             except Exception as e:
                 logger.error(f"Failed to save generated image attachment: {e}")
 
-    logger.info(f"📊 Attachment extraction complete: candidates={candidate_count}, saved={len(all_files)} files for message {message_id}")
-    return all_files
+    filtered_files = filter_email_attachments(all_files)
+    logger.info(f"📊 Attachment extraction complete: candidates={candidate_count}, total_saved={len(all_files)}, selected={len(filtered_files)} for message {message_id}")
+    return filtered_files
 
 
 def get_email_body(msg: Message) -> str:

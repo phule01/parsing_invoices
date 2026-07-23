@@ -11,6 +11,11 @@ function SettingsModule() {
   const [success, setSuccess] = useState('');
   const [testInProgress, setTestInProgress] = useState('');
 
+  // Mandatory Test Verification State
+  const [emailTested, setEmailTested] = useState(false);
+  const [telegramTested, setTelegramTested] = useState(false);
+  const [showAppPasswordHelp, setShowAppPasswordHelp] = useState(true);
+
   // User Management State
   const [newUser, setNewUser] = useState({ username: '', password: '' });
   const [userLoading, setUserLoading] = useState(false);
@@ -40,6 +45,15 @@ function SettingsModule() {
 
         const data = await response.json();
         setSettings(data);
+
+        // If settings already exist in database, initialize them as verified
+        if (data.EMAIL_ADDRESS && data.HAS_EMAIL_PASSWORD) {
+          setEmailTested(true);
+        }
+        if (data.TELEGRAM_BOT_TOKEN && data.TELEGRAM_CHAT_ID) {
+          setTelegramTested(true);
+        }
+
         if (data.GEMINI_API_KEY) {
           setUseCustomGemini(true);
         }
@@ -75,13 +89,39 @@ function SettingsModule() {
     setSettings({ ...settings, [name]: value });
     setError('');
     setSuccess('');
+
+    // Invalidate test status when corresponding credentials are modified
+    if (name === 'EMAIL_ADDRESS' || name === 'EMAIL_PASSWORD') {
+      setEmailTested(false);
+    }
+    if (name === 'TELEGRAM_BOT_TOKEN' || name === 'TELEGRAM_CHAT_ID') {
+      setTelegramTested(false);
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
     setError('');
     setSuccess('');
+
+    // 1. Mandatory field validation
+    const hasEmailPassword = settings.EMAIL_PASSWORD || settings.HAS_EMAIL_PASSWORD;
+    if (!settings.EMAIL_ADDRESS || !hasEmailPassword || !settings.TELEGRAM_BOT_TOKEN || !settings.TELEGRAM_CHAT_ID) {
+      setError('⚠️ Please fill in all required configuration fields (Email Address, Email App Password, Telegram Bot Token, Telegram Chat ID).');
+      return;
+    }
+
+    // 2. Mandatory test verification check
+    if (!emailTested) {
+      setError('⚠️ You must successfully test your Email Connection before saving settings!');
+      return;
+    }
+    if (!telegramTested) {
+      setError('⚠️ You must successfully test your Telegram Message connection before saving settings!');
+      return;
+    }
+
+    setLoading(true);
 
     try {
       const response = await fetch(`${API_BASE}/api/settings/update`, {
@@ -99,7 +139,7 @@ function SettingsModule() {
       }
 
       const data = await response.json();
-      setSuccess('✅ Settings updated successfully!');
+      setSuccess('✅ Settings verified and saved successfully!');
       setTimeout(() => setSuccess(''), 5000);
     } catch (err) {
       setError(`❌ Error: ${err.message}`);
@@ -137,9 +177,11 @@ function SettingsModule() {
       }
 
       const data = await response.json();
+      setEmailTested(true);
       setSuccess(`✅ ${data.message}`);
       setTimeout(() => setSuccess(''), 5000);
     } catch (err) {
+      setEmailTested(false);
       setError(`❌ Error: ${err.message}`);
     } finally {
       setTestInProgress('');
@@ -174,9 +216,11 @@ function SettingsModule() {
       if (data.status === 'error') {
         throw new Error(data.message);
       }
+      setTelegramTested(true);
       setSuccess(`✅ ${data.message}`);
       setTimeout(() => setSuccess(''), 5000);
     } catch (err) {
+      setTelegramTested(false);
       setError(`❌ Error: ${err.message}`);
     } finally {
       setTestInProgress('');
@@ -268,22 +312,31 @@ function SettingsModule() {
       {success && <div className="success-message">{success}</div>}
 
 
-      <div className="settings-guide" style={{ background: '#f8f9fa', padding: '20px', borderRadius: '10px', marginBottom: '25px', borderLeft: '5px solid #007bff', boxShadow: '0 2px 5px rgba(0,0,0,0.05)' }}>
+      <div className="settings-guide" style={{ background: '#f8f9fa', padding: '20px', borderRadius: '10px', marginBottom: '20px', borderLeft: '5px solid #007bff', boxShadow: '0 2px 5px rgba(0,0,0,0.05)' }}>
         <h3 style={{ margin: '0 0 15px 0', color: '#333' }}>📖 Quick Setup Guide</h3>
         <ol style={{ margin: 0, paddingLeft: '25px', lineHeight: '1.7', color: '#555' }}>
           <li><strong>Email Password:</strong> Generate a 16-character <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer">Google App Password</a>. Do not use your regular Gmail password.</li>
-
           <li><strong>Telegram Bot Token:</strong> Message <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer">@BotFather</a> on Telegram, create a new bot (<code>/newbot</code>), and copy the HTTP API Token.</li>
           <li><strong>Telegram Chat ID:</strong> Message your new bot (to start a chat), then forward a message to <a href="https://t.me/userinfobot" target="_blank" rel="noopener noreferrer">@userinfobot</a> to get your numerical Chat ID.</li>
         </ol>
       </div>
+
+      <div className="test-warning-banner">
+        <span>⚠️ <strong>Mandatory Verification:</strong> Please fill in all required details and perform successful connection tests for both <strong>Email</strong> and <strong>Telegram</strong> before saving your settings.</span>
+      </div>
+
       <form onSubmit={handleSubmit} className="settings-form">
 
         {/* Email Configuration */}
         <fieldset className="settings-section">
-          <legend>📧 Email Configuration (Gmail)</legend>
+          <legend>
+            📧 Email Configuration (Gmail)
+            <span className={`badge-status ${emailTested ? 'badge-success' : 'badge-warning'}`}>
+              {emailTested ? '✅ Tested & Verified' : '⚠️ Test Required'}
+            </span>
+          </legend>
           <div className="form-group">
-            <label htmlFor="EMAIL_ADDRESS">Email Address</label>
+            <label htmlFor="EMAIL_ADDRESS">Email Address *</label>
             <input
               id="EMAIL_ADDRESS"
               type="email"
@@ -291,19 +344,47 @@ function SettingsModule() {
               value={settings.EMAIL_ADDRESS || ''}
               onChange={handleChange}
               placeholder="your-email@gmail.com"
+              required
             />
             <small>Your personal Gmail account to monitor for invoices</small>
           </div>
           <div className="form-group">
-            <label htmlFor="EMAIL_PASSWORD">Email App Password</label>
+            <label htmlFor="EMAIL_PASSWORD" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>Email App Password *</span>
+              <button 
+                type="button" 
+                onClick={() => setShowAppPasswordHelp(!showAppPasswordHelp)}
+                style={{ background: 'none', border: 'none', color: '#0d6efd', cursor: 'pointer', fontSize: '0.85rem', textDecoration: 'underline' }}
+              >
+                {showAppPasswordHelp ? '❓ Hide Instructions' : '❓ How to get an App Password?'}
+              </button>
+            </label>
             <input
               id="EMAIL_PASSWORD"
               type="password"
               name="EMAIL_PASSWORD"
               value={settings.EMAIL_PASSWORD || ''}
               onChange={handleChange}
-              placeholder={settings.HAS_EMAIL_PASSWORD ? "•••••••• (Saved - leave empty to keep)" : "16-character Google App Password"}
+              placeholder={settings.HAS_EMAIL_PASSWORD ? "•••••••• (Not your normal Gmail password)" : "16-character Google App Password (e.g. abcd efgh ijkl mnop)"}
             />
+            <small style={{ color: '#d9534f', display: 'block', marginTop: '4px' }}>
+              ⚠️ <strong>Do NOT enter your normal Gmail password!</strong> Google requires a 16-character <em>App Password</em> to securely access your inbox.
+            </small>
+
+            {showAppPasswordHelp && (
+              <div style={{ marginTop: '12px', padding: '14px 16px', background: '#eef6ff', border: '1px solid #b6d4fe', borderRadius: '8px', fontSize: '0.88rem', color: '#1d3557', lineHeight: '1.6' }}>
+                <h4 style={{ margin: '0 0 8px 0', color: '#0d6efd', fontSize: '0.95rem' }}>📖 What is an Email App Password & How to Get It:</h4>
+                <p style={{ margin: '0 0 10px 0' }}>
+                  An <strong>App Password</strong> is a 16-digit security passcode created by Google so that automated tools (like this invoice system) can read your invoice emails safely without asking for your main Google password.
+                </p>
+                <ol style={{ margin: 0, paddingLeft: '20px' }}>
+                  <li>Make sure <strong>2-Step Verification</strong> is enabled on your Google Account (<a href="https://myaccount.google.com/security" target="_blank" rel="noopener noreferrer">Check Google Security</a>).</li>
+                  <li>Click this direct Google link: <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" style={{ fontWeight: 'bold' }}>myaccount.google.com/apppasswords</a></li>
+                  <li>Enter an App Name (e.g. <code>Invoice System</code>) and click <strong>Create</strong>.</li>
+                  <li>Copy the <strong>16-character code</strong> generated by Google (e.g. <code>abcd efgh ijkl mnop</code>) and paste it into the field above!</li>
+                </ol>
+              </div>
+            )}
           </div>
           <div className="form-actions" style={{ marginTop: '10px' }}>
             <button type="button" onClick={handleTestEmail} disabled={!!testInProgress} className="btn-secondary">
@@ -314,9 +395,14 @@ function SettingsModule() {
 
         {/* Telegram Configuration */}
         <fieldset className="settings-section">
-          <legend>🤖 Telegram Configuration</legend>
+          <legend>
+            🤖 Telegram Configuration
+            <span className={`badge-status ${telegramTested ? 'badge-success' : 'badge-warning'}`}>
+              {telegramTested ? '✅ Tested & Verified' : '⚠️ Test Required'}
+            </span>
+          </legend>
           <div className="form-group">
-            <label htmlFor="TELEGRAM_BOT_TOKEN">Telegram Bot Token</label>
+            <label htmlFor="TELEGRAM_BOT_TOKEN">Telegram Bot Token *</label>
             <input
               id="TELEGRAM_BOT_TOKEN"
               type="password"
@@ -324,12 +410,13 @@ function SettingsModule() {
               value={settings.TELEGRAM_BOT_TOKEN || ''}
               onChange={handleChange}
               placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
+              required
             />
             <small>Your personal Telegram Bot token</small>
           </div>
 
           <div className="form-group">
-            <label htmlFor="TELEGRAM_CHAT_ID">Telegram Chat ID</label>
+            <label htmlFor="TELEGRAM_CHAT_ID">Telegram Chat ID *</label>
             <input
               id="TELEGRAM_CHAT_ID"
               type="text"
@@ -337,6 +424,7 @@ function SettingsModule() {
               value={settings.TELEGRAM_CHAT_ID || ''}
               onChange={handleChange}
               placeholder="123456789"
+              required
             />
             <small>Your personal Chat ID to receive approval requests from your bot.</small>
           </div>

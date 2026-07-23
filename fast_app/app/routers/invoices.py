@@ -54,6 +54,9 @@ def _invoice_to_dict(invoice: Invoice) -> dict:
         "id": invoice.id,
         "invoice_number": invoice.invoice_number,
         "invoice_series": invoice.invoice_series,
+        "lookup_code": invoice.lookup_code,
+        "tax_authority_code": invoice.tax_authority_code,
+        "full_invoice_number": invoice.full_invoice_number,
         "invoice_date": invoice.invoice_date,
         "seller_name": invoice.seller_name,
         "buyer_name": invoice.buyer_name,
@@ -292,31 +295,78 @@ async def create_invoice(
         final_user_id = invoice_data.user_id
     else:
         final_user_id = user_id
-    # Build full invoice number string if series exists, otherwise use invoice number
-    full_number = (
-        f"{invoice_data.invoice_series}/{invoice_data.invoice_number}"
-        if invoice_data.invoice_series
-        else invoice_data.invoice_number
-    )
+    # Build full invoice number string combining series, number, and lookup code
+    series = (invoice_data.invoice_series or "").strip()
+    number = (invoice_data.invoice_number or "").strip()
+    lookup = (getattr(invoice_data, "lookup_code", None) or "").strip()
+
+    if series:
+        full_number = f"{series}/{number}"
+    else:
+        full_number = number
+
+    if lookup:
+        full_number = f"{full_number} ({lookup})"
     
     # Check if duplicate invoice exists for this user
+    inv_num_clean = (invoice_data.invoice_number or "").strip()
     dup_query = db.query(Invoice).filter(
         Invoice.user_id == final_user_id,
-        Invoice.invoice_number == invoice_data.invoice_number,
+        Invoice.invoice_number.ilike(inv_num_clean),
     )
     if invoice_data.invoice_series:
         dup_query = dup_query.filter(Invoice.invoice_series == invoice_data.invoice_series)
-    if invoice_data.seller_tax_code:
-        dup_query = dup_query.filter(Invoice.seller_tax_code == invoice_data.seller_tax_code)
-    elif invoice_data.seller_name:
-        dup_query = dup_query.filter(Invoice.seller_name == invoice_data.seller_name)
 
     existing = dup_query.first()
     if existing:
-        raise HTTPException(
-            status_code=409,
-            detail=f"Invoice {full_number} already exists",
-        )
+        new_format = (getattr(invoice_data, "file_format", "") or "").lower()
+        if not new_format and getattr(invoice_data, "raw_file_path", None):
+            if str(invoice_data.raw_file_path).lower().endswith(".xml"):
+                new_format = "xml"
+
+        existing_format = (getattr(existing, "file_format", "") or "").lower()
+        if not existing_format and getattr(existing, "raw_file_path", None):
+            if str(existing.raw_file_path).lower().endswith(".xml"):
+                existing_format = "xml"
+
+        # If incoming invoice is XML and existing invoice is non-XML (PDF/image), upgrade existing record!
+        if new_format == "xml" and existing_format != "xml":
+            logger.info(f"🔄 Upgrading existing invoice ID {existing.id} from {existing_format or 'pdf'} to XML data")
+            existing.seller_name = invoice_data.seller_name or existing.seller_name
+            existing.seller_tax_code = invoice_data.seller_tax_code or existing.seller_tax_code
+            existing.buyer_name = invoice_data.buyer_name or existing.buyer_name
+            existing.buyer_tax_code = invoice_data.buyer_tax_code or existing.buyer_tax_code
+            existing.total_before_tax = total_before_tax
+            existing.vat_rate = invoice_data.vat_rate
+            existing.vat_amount = vat_amount
+            existing.total_amount = total_amount
+            existing.raw_file_path = getattr(invoice_data, "raw_file_path", existing.raw_file_path)
+            existing.file_format = "xml"
+            existing.lookup_code = getattr(invoice_data, "lookup_code", existing.lookup_code)
+            existing.tax_authority_code = getattr(invoice_data, "tax_authority_code", existing.tax_authority_code)
+            existing.full_invoice_number = full_number
+
+            # Replace invoice items with accurate XML items
+            db.query(InvoiceItem).filter(InvoiceItem.invoice_id == existing.id).delete()
+            for item in invoice_data.items:
+                db.add(InvoiceItem(
+                    invoice_id=existing.id,
+                    product_id=item.product_id,
+                    item_name=item.item_name,
+                    unit=item.unit,
+                    quantity=item.quantity,
+                    unit_price=item.unit_price,
+                    total_price=item.total_price,
+                    vat_rate=item.vat_rate,
+                ))
+            db.commit()
+            db.refresh(existing)
+            return existing
+        else:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Invoice {full_number} already exists",
+            )
 
     total_before_tax = invoice_data.total_before_tax or sum(
         i.quantity * i.unit_price for i in invoice_data.items
@@ -330,6 +380,8 @@ async def create_invoice(
         invoice_series=invoice_data.invoice_series,
         invoice_number=invoice_data.invoice_number,
         full_invoice_number=full_number,
+        lookup_code=getattr(invoice_data, "lookup_code", None),
+        tax_authority_code=getattr(invoice_data, "tax_authority_code", None),
         invoice_date=invoice_data.invoice_date,
         seller_name=invoice_data.seller_name,
         seller_tax_code=invoice_data.seller_tax_code,

@@ -55,8 +55,10 @@ function InvoiceDetailsModal({ invoice, onClose }) {
         <div className="invoice-body">
           {/* Top Meta Info */}
           <div className="meta-info-bar">
-            <span><strong>Date:</strong> {formatDate(invoice.invoice_date)}</span>
             <span><strong>Lookup Code:</strong> {invoice.lookup_code || '—'}</span>
+            <span><strong>Series:</strong> {invoice.invoice_series || '—'}</span>
+            <span><strong>Invoice #:</strong> {invoice.invoice_number}</span>
+            <span><strong>Date:</strong> {formatDate(invoice.invoice_date)}</span>
             <span><strong>Tax Auth Code:</strong> {invoice.tax_authority_code || '—'}</span>
             <span><strong>Source:</strong> {invoice.source_email || '—'}</span>
           </div>

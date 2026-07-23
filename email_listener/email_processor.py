@@ -212,18 +212,23 @@ def normalize_vietnamese(s: str) -> str:
 
 def _is_invoice_email(subject: str, body: str, has_attachments: bool = False) -> bool:
     """
-    Check if email is likely an invoice based on subject keywords.
+    Check if email is likely an invoice based on subject keywords or forwarded tag.
     Returns True ONLY if email has PDF/XML attachments AND subject matches.
     """
     if not has_attachments:
         return False
+
+    subject_normalized = normalize_vietnamese(subject)
+
+    # Always accept forwarded emails (fwd:, fw:) if they carry attachments
+    if any(prefix in subject_normalized for prefix in ["fwd:", "fw:", "fwd", "fw", "chuyen tiep"]):
+        return True
         
     DEFAULT_KEYWORDS = "hóa đơn,hoa don,hoadon,hoa_don,hóa đơn điện tử,hoa don dien tu,hoadondientu,hđđt,hddt,invoice,einvoice,e-invoice,receipt,ebill,e-bill,biên lai,bien lai,bienlai,thanh toán,thanh toan,thanhtoan,cước,cuoc,vat,gtgt,chứng từ,chung tu"
     keywords_str = os.getenv("INVOICE_SUBJECT_KEYWORDS", DEFAULT_KEYWORDS)
     if keywords_str:
         keywords = [normalize_vietnamese(k.strip()) for k in keywords_str.split(",") if k.strip()]
         if keywords:
-            subject_normalized = normalize_vietnamese(subject)
             if not any(k in subject_normalized for k in keywords):
                 return False
                 
@@ -256,12 +261,17 @@ def _has_invoice_attachments(msg) -> bool:
             if part.get_content_maintype() == 'multipart':
                 continue
             filename = part.get_filename()
+            content_type = (part.get_content_type() or "").lower()
+
             if filename:
                 attachment_count += 1
                 ext = filename.lower().split('.')[-1]
                 if ext in ('pdf', 'xml', 'zip', 'png', 'jpg', 'jpeg', 'tiff', 'bmp', 'gif'):
                     invoice_attachment_count += 1
                     logger.debug(f"Found invoice attachment: {filename}")
+            elif content_type in ('application/pdf', 'text/xml', 'application/xml', 'application/zip') or content_type.startswith('image/'):
+                invoice_attachment_count += 1
+                logger.debug(f"Found invoice attachment by content-type: {content_type}")
         
         if invoice_attachment_count > 0:
             return True

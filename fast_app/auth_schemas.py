@@ -78,6 +78,8 @@ class InvoiceCreate(BaseModel):
     """Create invoice."""
     invoice_series: Optional[str] = None
     invoice_number: str
+    lookup_code: Optional[str] = None
+    tax_authority_code: Optional[str] = None
     invoice_date: datetime
     seller_name: Optional[str] = None
     seller_tax_code: Optional[str] = None
@@ -105,10 +107,13 @@ class InvoiceResponse(BaseModel):
     """Invoice response."""
     id: int
     invoice_number: str
-    invoice_series: Optional[str]
+    invoice_series: Optional[str] = None
+    lookup_code: Optional[str] = None
+    tax_authority_code: Optional[str] = None
+    full_invoice_number: Optional[str] = None
     invoice_date: datetime
     buyer_name: str
-    buyer_tax_code: Optional[str]
+    buyer_tax_code: Optional[str] = None
     status: str
     total_amount: float
     telegram_file_id: Optional[str] = None
@@ -123,6 +128,9 @@ class InvoiceListResponse(BaseModel):
     """Invoice list item response (minimal)."""
     id: int
     invoice_number: str
+    invoice_series: Optional[str] = None
+    lookup_code: Optional[str] = None
+    full_invoice_number: Optional[str] = None
     invoice_date: datetime
     buyer_name: str
     status: str
