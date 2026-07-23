@@ -711,13 +711,13 @@ function SettingsModule() {
                     className="guide-illustration-wrapper"
                     onClick={() =>
                       setZoomImage({
-                        src: '/assets/telegram_step5.png',
+                        src: '/assets/telegram_step2.png',
                         title: 'Telegram Setup — Step 2: Create Bot & Copy Token',
                       })
                     }
                   >
                     <img
-                      src="/assets/telegram_step5.png"
+                      src="/assets/telegram_step2.png"
                       alt="Step 2: Create bot with /newbot and copy HTTP API token"
                       className="guide-illustration"
                     />
@@ -780,13 +780,13 @@ function SettingsModule() {
                     className="guide-illustration-wrapper"
                     onClick={() =>
                       setZoomImage({
-                        src: '/assets/telegram_step2.png',
+                        src: '/assets/telegram_step5.png',
                         title: 'Telegram Setup — Step 5: Copy Numerical Chat ID',
                       })
                     }
                   >
                     <img
-                      src="/assets/telegram_step2.png"
+                      src="/assets/telegram_step5.png"
                       alt="Step 5: Copy your numerical Chat ID"
                       className="guide-illustration"
                     />
