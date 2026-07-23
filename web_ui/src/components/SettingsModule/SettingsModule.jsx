@@ -10,35 +10,41 @@ function SettingsModule() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [testInProgress, setTestInProgress] = useState('');
+  const [emailStep, setEmailStep] = useState(1);
+  const [teleStep, setTeleStep] = useState(1);
+  const [zoomImage, setZoomImage] = useState(null);
 
   // Mandatory Test Verification State
   const [emailTested, setEmailTested] = useState(false);
   const [telegramTested, setTelegramTested] = useState(false);
-  const [showAppPasswordHelp, setShowAppPasswordHelp] = useState(true);
 
-  // User Management State
-  const [newUser, setNewUser] = useState({ username: '', password: '' });
-  const [userLoading, setUserLoading] = useState(false);
-  const [userSuccess, setUserSuccess] = useState('');
-  const [userError, setUserError] = useState('');
-
-  // Pending Approvals State
+  // Admin Pending Users State
   const [pendingUsers, setPendingUsers] = useState([]);
   const [approvalLoading, setApprovalLoading] = useState(false);
 
-  const [useCustomGemini, setUseCustomGemini] = useState(false);
   const [settings, setSettings] = useState({
     EMAIL_ADDRESS: '',
     EMAIL_PASSWORD: '',
+    TELEGRAM_BOT_TOKEN: '',
+    TELEGRAM_CHAT_ID: '',
     GEMINI_API_KEY: '',
   });
+
+  // ESC key to close lightbox modal
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') setZoomImage(null);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Fetch current settings
   useEffect(() => {
     const fetchSettings = async () => {
       try {
         const response = await fetch(`${API_BASE}/api/settings/`, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${token}` },
         });
 
         if (!response.ok) throw new Error('Failed to fetch settings');
@@ -46,16 +52,11 @@ function SettingsModule() {
         const data = await response.json();
         setSettings(data);
 
-        // If settings already exist in database, initialize them as verified
         if (data.EMAIL_ADDRESS && data.HAS_EMAIL_PASSWORD) {
           setEmailTested(true);
         }
         if (data.TELEGRAM_BOT_TOKEN && data.TELEGRAM_CHAT_ID) {
           setTelegramTested(true);
-        }
-
-        if (data.GEMINI_API_KEY) {
-          setUseCustomGemini(true);
         }
       } catch (err) {
         setError(err.message);
@@ -65,14 +66,14 @@ function SettingsModule() {
     const fetchPendingUsers = async () => {
       try {
         const response = await fetch(`${API_BASE}/api/auth/admin/pending-users`, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${token}` },
         });
         if (response.ok) {
           const data = await response.json();
           setPendingUsers(data);
         }
       } catch (err) {
-        console.error("Failed to fetch pending users:", err);
+        console.error('Failed to fetch pending users:', err);
       }
     };
 
@@ -90,7 +91,6 @@ function SettingsModule() {
     setError('');
     setSuccess('');
 
-    // Invalidate test status when corresponding credentials are modified
     if (name === 'EMAIL_ADDRESS' || name === 'EMAIL_PASSWORD') {
       setEmailTested(false);
     }
@@ -104,20 +104,18 @@ function SettingsModule() {
     setError('');
     setSuccess('');
 
-    // 1. Mandatory field validation
     const hasEmailPassword = settings.EMAIL_PASSWORD || settings.HAS_EMAIL_PASSWORD;
     if (!settings.EMAIL_ADDRESS || !hasEmailPassword || !settings.TELEGRAM_BOT_TOKEN || !settings.TELEGRAM_CHAT_ID) {
-      setError('⚠️ Please fill in all required configuration fields (Email Address, Email App Password, Telegram Bot Token, Telegram Chat ID).');
+      setError('⚠️ Fill in every required field and run a successful connection test before saving.');
       return;
     }
 
-    // 2. Mandatory test verification check
     if (!emailTested) {
-      setError('⚠️ You must successfully test your Email Connection before saving settings!');
+      setError('⚠️ You must successfully test your Email connection before saving settings.');
       return;
     }
     if (!telegramTested) {
-      setError('⚠️ You must successfully test your Telegram Message connection before saving settings!');
+      setError('⚠️ You must successfully test your Telegram connection before saving settings.');
       return;
     }
 
@@ -127,7 +125,7 @@ function SettingsModule() {
       const response = await fetch(`${API_BASE}/api/settings/update`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(settings),
@@ -138,7 +136,6 @@ function SettingsModule() {
         throw new Error(errorData.detail || 'Failed to update settings');
       }
 
-      const data = await response.json();
       setSuccess('✅ Settings verified and saved successfully!');
       setTimeout(() => setSuccess(''), 5000);
     } catch (err) {
@@ -161,14 +158,14 @@ function SettingsModule() {
       const response = await fetch(`${API_BASE}/api/settings/test-email`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           target_email: settings.EMAIL_ADDRESS,
           email_address: settings.EMAIL_ADDRESS,
-          email_password: settings.EMAIL_PASSWORD || ''
-        })
+          email_password: settings.EMAIL_PASSWORD || '',
+        }),
       });
 
       if (!response.ok) {
@@ -201,13 +198,13 @@ function SettingsModule() {
       const response = await fetch(`${API_BASE}/api/settings/test-telegram`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           bot_token: settings.TELEGRAM_BOT_TOKEN,
-          chat_id: settings.TELEGRAM_CHAT_ID
-        })
+          chat_id: settings.TELEGRAM_CHAT_ID,
+        }),
       });
 
       if (!response.ok) throw new Error('Failed to send test message');
@@ -227,254 +224,639 @@ function SettingsModule() {
     }
   };
 
-  const handleCreateUser = async (e) => {
-    e.preventDefault();
-    setUserLoading(true);
-    setUserError('');
-    setUserSuccess('');
-
-    try {
-      const response = await fetch(`${API_BASE}/api/auth/register`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(newUser),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.detail || 'Failed to create user');
-      }
-
-      setUserSuccess(`✅ User ${newUser.username} created successfully!`);
-      setNewUser({ username: '', email: '', password: '' });
-      setTimeout(() => setUserSuccess(''), 5000);
-    } catch (err) {
-      setUserError(`❌ Error: ${err.message}`);
-    } finally {
-      setUserLoading(false);
-    }
-  };
-
   const handleApproveUser = async (userId) => {
     setApprovalLoading(true);
-    setUserError('');
-    setUserSuccess('');
+    setError('');
+    setSuccess('');
     try {
       const response = await fetch(`${API_BASE}/api/auth/admin/approve-user/${userId}`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (!response.ok) throw new Error('Failed to approve user');
-      setUserSuccess('User approved successfully!');
-      setPendingUsers(pendingUsers.filter(u => u.id !== userId));
-      setTimeout(() => setUserSuccess(''), 5000);
+      setSuccess('User approved successfully!');
+      setPendingUsers(pendingUsers.filter((u) => u.id !== userId));
+      setTimeout(() => setSuccess(''), 5000);
     } catch (err) {
-      setUserError(err.message);
+      setError(err.message);
     } finally {
       setApprovalLoading(false);
     }
   };
 
   const handleRejectUser = async (userId) => {
-    if (!window.confirm("Are you sure you want to reject this user? Their request will be deleted.")) return;
+    if (!window.confirm('Are you sure you want to reject this user? Their request will be deleted.')) return;
     setApprovalLoading(true);
-    setUserError('');
-    setUserSuccess('');
+    setError('');
+    setSuccess('');
     try {
       const response = await fetch(`${API_BASE}/api/auth/admin/reject-user/${userId}`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (!response.ok) throw new Error('Failed to reject user');
-      setUserSuccess('User rejected and removed.');
-      setPendingUsers(pendingUsers.filter(u => u.id !== userId));
-      setTimeout(() => setUserSuccess(''), 5000);
+      setSuccess('User rejected and removed.');
+      setPendingUsers(pendingUsers.filter((u) => u.id !== userId));
+      setTimeout(() => setSuccess(''), 5000);
     } catch (err) {
-      setUserError(err.message);
+      setError(err.message);
     } finally {
       setApprovalLoading(false);
     }
   };
 
-  {/* Admin Section is now just for User Management, handled below */ }
-
-
-
   return (
-    <div className="settings-module">
-      <h2>⚙️ Settings & Integrations</h2>
-      <p>Configure your personal and system integrations here.</p>
-
-      {error && <div className="error-message">{error}</div>}
-      {success && <div className="success-message">{success}</div>}
-
-
-      <div className="settings-guide" style={{ background: '#f8f9fa', padding: '20px', borderRadius: '10px', marginBottom: '20px', borderLeft: '5px solid #007bff', boxShadow: '0 2px 5px rgba(0,0,0,0.05)' }}>
-        <h3 style={{ margin: '0 0 15px 0', color: '#333' }}>📖 Quick Setup Guide</h3>
-        <ol style={{ margin: 0, paddingLeft: '25px', lineHeight: '1.7', color: '#555' }}>
-          <li><strong>Email Password:</strong> Generate a 16-character <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer">Google App Password</a>. Do not use your regular Gmail password.</li>
-          <li><strong>Telegram Bot Token:</strong> Message <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer">@BotFather</a> on Telegram, create a new bot (<code>/newbot</code>), and copy the HTTP API Token.</li>
-          <li><strong>Telegram Chat ID:</strong> Message your new bot (to start a chat), then forward a message to <a href="https://t.me/userinfobot" target="_blank" rel="noopener noreferrer">@userinfobot</a> to get your numerical Chat ID.</li>
-        </ol>
+    <div id="page-settings" className="page active">
+      <div className="page-header">
+        <h2>
+          <span className="eyebrow">Configuration</span>Settings &amp; Integrations
+        </h2>
       </div>
 
-      <div className="test-warning-banner">
-        <span>⚠️ <strong>Mandatory Verification:</strong> Please fill in all required details and perform successful connection tests for both <strong>Email</strong> and <strong>Telegram</strong> before saving your settings.</span>
-      </div>
+      {error && (
+        <div className="warn-banner alert-error-banner" style={{ background: 'rgba(179,49,44,0.08)', borderColor: 'var(--seal)', color: 'var(--seal-dark)', marginBottom: '20px' }}>
+          {error}
+        </div>
+      )}
+      {success && (
+        <div className="info-note alert-success-note" style={{ background: 'var(--approve-soft)', color: 'var(--approve)', borderLeftColor: 'var(--approve)', marginTop: 0, marginBottom: '20px' }}>
+          {success}
+        </div>
+      )}
 
-      <form onSubmit={handleSubmit} className="settings-form">
-
-        {/* Email Configuration */}
-        <fieldset className="settings-section">
-          <legend>
-            📧 Email Configuration (Gmail)
-            <span className={`badge-status ${emailTested ? 'badge-success' : 'badge-warning'}`}>
-              {emailTested ? '✅ Tested & Verified' : '⚠️ Test Required'}
-            </span>
-          </legend>
-          <div className="form-group">
-            <label htmlFor="EMAIL_ADDRESS">Email Address *</label>
-            <input
-              id="EMAIL_ADDRESS"
-              type="email"
-              name="EMAIL_ADDRESS"
-              value={settings.EMAIL_ADDRESS || ''}
-              onChange={handleChange}
-              placeholder="your-email@gmail.com"
-              required
-            />
-            <small>Your personal Gmail account to monitor for invoices</small>
+      <div className="settings-layout">
+        {/* Left Column: Config Forms */}
+        <div className="settings-main-col">
+          <div className="guide">
+            <h4>📋 Quick Setup Summary</h4>
+            <ol>
+              <li>
+                <b>Email Password</b> — generate a 16‑character{' '}
+                <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer">
+                  Google App Password
+                </a>
+                . (Requires 2-Step Verification ON).
+              </li>
+              <li>
+                <b>Telegram Bot Token</b> — message{' '}
+                <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer">
+                  @BotFather
+                </a>{' '}
+                on Telegram (/newbot), copy the HTTP API token.
+              </li>
+              <li>
+                <b>Telegram Chat ID</b> — message your new bot, then forward to{' '}
+                <a href="https://t.me/userinfobot" target="_blank" rel="noopener noreferrer">
+                  @userinfobot
+                </a>{' '}
+                to get your chat ID.
+              </li>
+            </ol>
           </div>
-          <div className="form-group">
-            <label htmlFor="EMAIL_PASSWORD" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>Email App Password *</span>
-              <button 
-                type="button" 
-                onClick={() => setShowAppPasswordHelp(!showAppPasswordHelp)}
-                style={{ background: 'none', border: 'none', color: '#0d6efd', cursor: 'pointer', fontSize: '0.85rem', textDecoration: 'underline' }}
-              >
-                {showAppPasswordHelp ? '❓ Hide Instructions' : '❓ How to get an App Password?'}
-              </button>
-            </label>
-            <input
-              id="EMAIL_PASSWORD"
-              type="password"
-              name="EMAIL_PASSWORD"
-              value={settings.EMAIL_PASSWORD || ''}
-              onChange={handleChange}
-              placeholder={settings.HAS_EMAIL_PASSWORD ? "•••••••• (Not your normal Gmail password)" : "16-character Google App Password (e.g. abcd efgh ijkl mnop)"}
-            />
-            <small style={{ color: '#d9534f', display: 'block', marginTop: '4px' }}>
-              ⚠️ <strong>Do NOT enter your normal Gmail password!</strong> Google requires a 16-character <em>App Password</em> to securely access your inbox.
-            </small>
 
-            {showAppPasswordHelp && (
-              <div style={{ marginTop: '12px', padding: '14px 16px', background: '#eef6ff', border: '1px solid #b6d4fe', borderRadius: '8px', fontSize: '0.88rem', color: '#1d3557', lineHeight: '1.6' }}>
-                <h4 style={{ margin: '0 0 8px 0', color: '#0d6efd', fontSize: '0.95rem' }}>📖 What is an Email App Password & How to Get It:</h4>
-                <p style={{ margin: '0 0 10px 0' }}>
-                  An <strong>App Password</strong> is a 16-digit security passcode created by Google so that automated tools (like this invoice system) can read your invoice emails safely without asking for your main Google password.
-                </p>
-                <ol style={{ margin: 0, paddingLeft: '20px' }}>
-                  <li>Make sure <strong>2-Step Verification</strong> is enabled on your Google Account (<a href="https://myaccount.google.com/security" target="_blank" rel="noopener noreferrer">Check Google Security</a>).</li>
-                  <li>Click this direct Google link: <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" style={{ fontWeight: 'bold' }}>myaccount.google.com/apppasswords</a></li>
-                  <li>Enter an App Name (e.g. <code>Invoice System</code>) and click <strong>Create</strong>.</li>
-                  <li>Copy the <strong>16-character code</strong> generated by Google (e.g. <code>abcd efgh ijkl mnop</code>) and paste it into the field above!</li>
-                </ol>
+          <form onSubmit={handleSubmit} className="settings-form">
+            {/* Gmail Config */}
+            <div className="panel card-block">
+              <div className="card-block-head">
+                <h3>✉ Email Configuration (Gmail)</h3>
+                <span className={`verified-pill ${emailTested ? '' : 'unverified'}`}>
+                  {emailTested ? '✓ Verified' : '⚠ Test Required'}
+                </span>
               </div>
-            )}
-          </div>
-          <div className="form-actions" style={{ marginTop: '10px' }}>
-            <button type="button" onClick={handleTestEmail} disabled={!!testInProgress} className="btn-secondary">
-              {testInProgress === 'email' ? '⏳ Testing...' : '🧪 Test Email Connection'}
+              <div className="field">
+                <label>Email Address</label>
+                <input
+                  type="email"
+                  name="EMAIL_ADDRESS"
+                  value={settings.EMAIL_ADDRESS || ''}
+                  onChange={handleChange}
+                  placeholder="phulehoccode@gmail.com"
+                  required
+                />
+                <div className="help-text">Your personal Gmail account to monitor for invoices.</div>
+              </div>
+              <div className="field">
+                <label>Email App Password</label>
+                <input
+                  type="password"
+                  name="EMAIL_PASSWORD"
+                  value={settings.EMAIL_PASSWORD || ''}
+                  onChange={handleChange}
+                  placeholder={settings.HAS_EMAIL_PASSWORD ? '••••••••••••••••' : '16-character Google App Password'}
+                />
+                <div className="help-text" style={{ color: 'var(--seal)' }}>
+                  Do not enter your normal Gmail password — Google requires a 16‑character App Password.
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn-test"
+                onClick={handleTestEmail}
+                disabled={!!testInProgress}
+              >
+                {testInProgress === 'email' ? 'Testing Email...' : 'Test Email Connection'}
+              </button>
+            </div>
+
+            {/* Telegram Config */}
+            <div className="panel card-block">
+              <div className="card-block-head">
+                <h3>📨 Telegram Configuration</h3>
+                <span className={`verified-pill ${telegramTested ? '' : 'unverified'}`}>
+                  {telegramTested ? '✓ Verified' : '⚠ Test Required'}
+                </span>
+              </div>
+              <div className="field">
+                <label>Telegram Bot Token</label>
+                <input
+                  type="password"
+                  name="TELEGRAM_BOT_TOKEN"
+                  value={settings.TELEGRAM_BOT_TOKEN || ''}
+                  onChange={handleChange}
+                  placeholder="123456:ABC-DEF..."
+                  required
+                />
+              </div>
+              <div className="field">
+                <label>Telegram Chat ID</label>
+                <input
+                  type="text"
+                  name="TELEGRAM_CHAT_ID"
+                  value={settings.TELEGRAM_CHAT_ID || ''}
+                  onChange={handleChange}
+                  placeholder="8269871698"
+                  required
+                />
+                <div className="help-text">Your personal chat ID to receive approval requests from your bot.</div>
+              </div>
+              <button
+                type="button"
+                className="btn-test"
+                onClick={handleTestTelegram}
+                disabled={!!testInProgress}
+              >
+                {testInProgress === 'telegram' ? 'Testing Telegram...' : 'Test Telegram Message'}
+              </button>
+            </div>
+
+            {/* Collapsible Gemini AI Config (Hidden by default like old logic) */}
+            <details className="panel card-block collapsible-ai-panel">
+              <summary className="ai-summary-header">
+                🤖 AI Parser Configuration (Advanced)
+              </summary>
+              <div className="ai-content-body" style={{ marginTop: '16px' }}>
+                <div className="field">
+                  <label>Gemini API Key</label>
+                  <input
+                    type="password"
+                    name="GEMINI_API_KEY"
+                    value={settings.GEMINI_API_KEY || ''}
+                    onChange={handleChange}
+                    placeholder="Leave blank to use default system key"
+                  />
+                  <div className="help-text">
+                    Your personal Gemini API key for invoice parsing. Leave blank to use system default.
+                  </div>
+                </div>
+              </div>
+            </details>
+
+            <button type="submit" className="btn-save" disabled={loading}>
+              {loading ? 'Saving...' : 'Save Settings'}
             </button>
-          </div>
-        </fieldset>
+          </form>
 
-        {/* Telegram Configuration */}
-        <fieldset className="settings-section">
-          <legend>
-            🤖 Telegram Configuration
-            <span className={`badge-status ${telegramTested ? 'badge-success' : 'badge-warning'}`}>
-              {telegramTested ? '✅ Tested & Verified' : '⚠️ Test Required'}
-            </span>
-          </legend>
-          <div className="form-group">
-            <label htmlFor="TELEGRAM_BOT_TOKEN">Telegram Bot Token *</label>
-            <input
-              id="TELEGRAM_BOT_TOKEN"
-              type="password"
-              name="TELEGRAM_BOT_TOKEN"
-              value={settings.TELEGRAM_BOT_TOKEN || ''}
-              onChange={handleChange}
-              placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
-              required
-            />
-            <small>Your personal Telegram Bot token</small>
-          </div>
+          {/* Pending Approvals Section for Admin */}
+          {user?.is_admin && pendingUsers.length > 0 && (
+            <div className="panel card-block" style={{ marginTop: '22px' }}>
+              <div className="card-block-head">
+                <h3>👥 Pending User Approvals ({pendingUsers.length})</h3>
+              </div>
+              <div className="pending-users-list">
+                {pendingUsers.map((pUser) => (
+                  <div key={pUser.id} className="pending-user-item">
+                    <div>
+                      <b>{pUser.username}</b>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        className="act approve"
+                        onClick={() => handleApproveUser(pUser.id)}
+                        disabled={approvalLoading}
+                      >
+                        ✓ Approve
+                      </button>
+                      <button
+                        className="act reject"
+                        onClick={() => handleRejectUser(pUser.id)}
+                        disabled={approvalLoading}
+                      >
+                        ✕ Reject
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
-          <div className="form-group">
-            <label htmlFor="TELEGRAM_CHAT_ID">Telegram Chat ID *</label>
-            <input
-              id="TELEGRAM_CHAT_ID"
-              type="text"
-              name="TELEGRAM_CHAT_ID"
-              value={settings.TELEGRAM_CHAT_ID || ''}
-              onChange={handleChange}
-              placeholder="123456789"
-              required
-            />
-            <small>Your personal Chat ID to receive approval requests from your bot.</small>
-          </div>
+          <div className="info-note">ⓘ Integration settings (Email, API, Telegram) are personal to your account.</div>
+        </div>
 
-          <div className="form-actions" style={{ marginTop: '10px' }}>
-            <button type="button" onClick={handleTestTelegram} disabled={!!testInProgress} className="btn-secondary">
-              {testInProgress === 'telegram' ? '⏳ Testing...' : '🧪 Test Telegram Message'}
-            </button>
-          </div>
-        </fieldset>
+        {/* Right Column: Real Visual Setup Guides */}
+        <div className="settings-guide-col">
+          {/* Google App Password Guide */}
+          <div className="panel card-block visual-guide-card">
+            <div className="card-block-head">
+              <h3>📖 Google App Password Creation Guide</h3>
+            </div>
 
-        {/* AI Configuration */}
-        <details className="settings-section" style={{ padding: '15px', border: '1px solid #ddd', borderRadius: '8px', marginBottom: '20px' }}>
-          <summary style={{ cursor: 'pointer', fontWeight: 'bold', fontSize: '1.1em', userSelect: 'none' }}>
-            🤖 AI Parser Configuration (Advanced)
-          </summary>
-          <div style={{ marginTop: '20px' }}>
-            <div className="form-group" style={{ marginTop: '5px' }}>
-              <label htmlFor="GEMINI_API_KEY">Gemini API Key</label>
-              <input
-                id="GEMINI_API_KEY"
-                type="password"
-                name="GEMINI_API_KEY"
-                value={settings.GEMINI_API_KEY || ''}
-                onChange={handleChange}
-                placeholder="••••••••••••••••••••••••••••"
-              />
-              <small>
-                Your personal Gemini API key for invoice parsing. Leave blank to use the system default.
-              </small>
+            <div className="step-tabs">
+              <button
+                type="button"
+                className={`step-tab ${emailStep === 1 ? 'active' : ''}`}
+                onClick={() => setEmailStep(1)}
+              >
+                1. Enable 2FA
+              </button>
+              <button
+                type="button"
+                className={`step-tab ${emailStep === 2 ? 'active' : ''}`}
+                onClick={() => setEmailStep(2)}
+              >
+                2. App Passwords
+              </button>
+              <button
+                type="button"
+                className={`step-tab ${emailStep === 3 ? 'active' : ''}`}
+                onClick={() => setEmailStep(3)}
+              >
+                3. Name &amp; Create
+              </button>
+              <button
+                type="button"
+                className={`step-tab ${emailStep === 4 ? 'active' : ''}`}
+                onClick={() => setEmailStep(4)}
+              >
+                4. Copy Code
+              </button>
+            </div>
+
+            <div className="step-image-container">
+              {emailStep === 1 && (
+                <div>
+                  <div
+                    className="guide-illustration-wrapper"
+                    onClick={() =>
+                      setZoomImage({
+                        src: '/assets/app_password_step1.png',
+                        title: 'Google App Password — Step 1: Enable 2-Step Verification',
+                      })
+                    }
+                  >
+                    <img
+                      src="/assets/app_password_step1.png"
+                      alt="Step 1: Check 2-Step Verification"
+                      className="guide-illustration"
+                    />
+                  </div>
+                  <p className="help-text">
+                    🔒 <b>Step 1: Enable 2-Step Verification</b><br />
+                    Open Google Account Security (<code>myaccount.google.com/security</code>). Ensure <b>2-Step Verification</b> is turned <b>ON</b>.
+                  </p>
+                </div>
+              )}
+              {emailStep === 2 && (
+                <div>
+                  <div
+                    className="guide-illustration-wrapper"
+                    onClick={() =>
+                      setZoomImage({
+                        src: '/assets/app_password_step2.png',
+                        title: 'Google App Password — Step 2: Access App Passwords',
+                      })
+                    }
+                  >
+                    <img
+                      src="/assets/app_password_step2.png"
+                      alt="Step 2: Password Verification"
+                      className="guide-illustration"
+                    />
+                  </div>
+                  <p className="help-text">
+                    🔑 <b>Step 2: Access App Passwords</b><br />
+                    Select <b>App passwords</b> (or visit <code>myaccount.google.com/apppasswords</code>). Re-enter your password to confirm identity.
+                  </p>
+                </div>
+              )}
+              {emailStep === 3 && (
+                <div>
+                  <div
+                    className="guide-illustration-wrapper"
+                    onClick={() =>
+                      setZoomImage({
+                        src: '/assets/app_password_step3.png',
+                        title: 'Google App Password — Step 3: Name App and Click Create',
+                      })
+                    }
+                  >
+                    <img
+                      src="/assets/app_password_step3.png"
+                      alt="Step 3: Enter App Name and click Create"
+                      className="guide-illustration"
+                    />
+                  </div>
+                  <p className="help-text">
+                    ✍️ <b>Step 3: Name Your App &amp; Generate</b><br />
+                    Type an app name into <i>Tên ứng dụng</i> (e.g. <code>Invoice System</code>) and click <b>Tạo / Create</b>.
+                  </p>
+                </div>
+              )}
+              {emailStep === 4 && (
+                <div>
+                  <div
+                    className="guide-illustration-wrapper"
+                    onClick={() =>
+                      setZoomImage({
+                        src: '/assets/app_password_step4.png',
+                        title: 'Google App Password — Step 4: Copy Generated 16-Character Code',
+                      })
+                    }
+                  >
+                    <img
+                      src="/assets/app_password_step4.png"
+                      alt="Step 4: Copy 16-character generated code"
+                      className="guide-illustration"
+                    />
+                  </div>
+                  <p className="help-text">
+                    📋 <b>Step 4: Copy 16-Character Code</b><br />
+                    Copy the generated 16-character password (e.g. <code>abcd efgh ijkl mnop</code>) and paste it into the <b>Email App Password</b> field on the left.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="guide-nav-buttons">
+              <button
+                type="button"
+                className="btn-ghost"
+                disabled={emailStep === 1}
+                onClick={() => setEmailStep((prev) => Math.max(1, prev - 1))}
+              >
+                ← Previous
+              </button>
+              <span className="code">Step {emailStep} of 4</span>
+              <button
+                type="button"
+                className="btn-ghost"
+                disabled={emailStep === 4}
+                onClick={() => setEmailStep((prev) => Math.min(4, prev + 1))}
+              >
+                Next →
+              </button>
+            </div>
+
+            <div className="guide-actions" style={{ marginTop: '14px' }}>
+              <a
+                href="https://myaccount.google.com/apppasswords"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-ghost guide-btn"
+              >
+                ↗ Open Google App Passwords
+              </a>
+              <a
+                href="https://myaccount.google.com/signinoptions/two-step-verification"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-ghost guide-btn"
+              >
+                🔒 Enable 2-Step Verification
+              </a>
             </div>
           </div>
-        </details>
 
-        {/* Submit Button */}
-        <div className="form-actions">
-          <button type="submit" disabled={loading} className="btn-primary">
-            {loading ? '⏳ Saving...' : '💾 Save Settings'}
-          </button>
+          {/* Telegram Bot Setup Guide */}
+          <div className="panel card-block visual-guide-card">
+            <div className="card-block-head">
+              <h3>📱 Telegram Bot Setup Guide</h3>
+            </div>
+
+            <div className="step-tabs">
+              <button
+                type="button"
+                className={`step-tab ${teleStep === 1 ? 'active' : ''}`}
+                onClick={() => setTeleStep(1)}
+              >
+                1. Find @BotFather
+              </button>
+              <button
+                type="button"
+                className={`step-tab ${teleStep === 2 ? 'active' : ''}`}
+                onClick={() => setTeleStep(2)}
+              >
+                2. Get Token
+              </button>
+              <button
+                type="button"
+                className={`step-tab ${teleStep === 3 ? 'active' : ''}`}
+                onClick={() => setTeleStep(3)}
+              >
+                3. Start Bot
+              </button>
+              <button
+                type="button"
+                className={`step-tab ${teleStep === 4 ? 'active' : ''}`}
+                onClick={() => setTeleStep(4)}
+              >
+                4. Find @userinfobot
+              </button>
+              <button
+                type="button"
+                className={`step-tab ${teleStep === 5 ? 'active' : ''}`}
+                onClick={() => setTeleStep(5)}
+              >
+                5. Get Chat ID
+              </button>
+            </div>
+
+            <div className="step-image-container">
+              {teleStep === 1 && (
+                <div>
+                  <div
+                    className="guide-illustration-wrapper"
+                    onClick={() =>
+                      setZoomImage({
+                        src: '/assets/telegram_step1.png',
+                        title: 'Telegram Setup — Step 1: Search @BotFather',
+                      })
+                    }
+                  >
+                    <img
+                      src="/assets/telegram_step1.png"
+                      alt="Step 1: Search @BotFather on Telegram"
+                      className="guide-illustration"
+                    />
+                  </div>
+                  <p className="help-text">
+                    🔎 <b>Step 1: Search &amp; Open @BotFather</b><br />
+                    Search <b>@BotFather</b> in the Telegram search bar and tap the official account with the blue checkmark.
+                  </p>
+                </div>
+              )}
+              {teleStep === 2 && (
+                <div>
+                  <div
+                    className="guide-illustration-wrapper"
+                    onClick={() =>
+                      setZoomImage({
+                        src: '/assets/telegram_step5.png',
+                        title: 'Telegram Setup — Step 2: Create Bot & Copy Token',
+                      })
+                    }
+                  >
+                    <img
+                      src="/assets/telegram_step5.png"
+                      alt="Step 2: Create bot with /newbot and copy HTTP API token"
+                      className="guide-illustration"
+                    />
+                  </div>
+                  <p className="help-text">
+                    🤖 <b>Step 2: Create Bot &amp; Copy HTTP API Token</b><br />
+                    Type <code>/newbot</code> in chat. Set a bot Name and Username ending in <code>bot</code> (e.g. <code>zu4b1t_bot</code>). Copy the <b>HTTP API Token</b> (circled in red) into <i>Telegram Bot Token</i> on the left.
+                  </p>
+                </div>
+              )}
+              {teleStep === 3 && (
+                <div>
+                  <div
+                    className="guide-illustration-wrapper"
+                    onClick={() =>
+                      setZoomImage({
+                        src: '/assets/telegram_step3.png',
+                        title: 'Telegram Setup — Step 3: Start Your Bot ("Bắt đầu Bot")',
+                      })
+                    }
+                  >
+                    <img
+                      src="/assets/telegram_step3.png"
+                      alt="Step 3: Open your bot link and click Bắt đầu Bot / Start"
+                      className="guide-illustration"
+                    />
+                  </div>
+                  <p className="help-text">
+                    🚀 <b>Step 3: Start Your Bot ("Bắt đầu Bot")</b><br />
+                    Click your bot link (e.g. <code>t.me/zu4b1t_bot</code>) from BotFather's message, then press <b>Bắt đầu Bot / Start</b> at the bottom. <i>(Required for receiving notifications!)</i>
+                  </p>
+                </div>
+              )}
+              {teleStep === 4 && (
+                <div>
+                  <div
+                    className="guide-illustration-wrapper"
+                    onClick={() =>
+                      setZoomImage({
+                        src: '/assets/telegram_step4.png',
+                        title: 'Telegram Setup — Step 4: Search @userinfobot',
+                      })
+                    }
+                  >
+                    <img
+                      src="/assets/telegram_step4.png"
+                      alt="Step 4: Search @userinfobot"
+                      className="guide-illustration"
+                    />
+                  </div>
+                  <p className="help-text">
+                    🆔 <b>Step 4: Search @userinfobot</b><br />
+                    Search <b>@userinfobot</b> in the Telegram search bar to get your personal numerical Chat ID.
+                  </p>
+                </div>
+              )}
+              {teleStep === 5 && (
+                <div>
+                  <div
+                    className="guide-illustration-wrapper"
+                    onClick={() =>
+                      setZoomImage({
+                        src: '/assets/telegram_step2.png',
+                        title: 'Telegram Setup — Step 5: Copy Numerical Chat ID',
+                      })
+                    }
+                  >
+                    <img
+                      src="/assets/telegram_step2.png"
+                      alt="Step 5: Copy your numerical Chat ID"
+                      className="guide-illustration"
+                    />
+                  </div>
+                  <p className="help-text">
+                    📋 <b>Step 5: Copy Your Numerical Chat ID</b><br />
+                    Send <code>/start</code> or a message to @userinfobot. Copy the numerical number listed next to <b>Id:</b> (e.g. <code>8269871698</code>) into <i>Telegram Chat ID</i> on the left.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="guide-nav-buttons">
+              <button
+                type="button"
+                className="btn-ghost"
+                disabled={teleStep === 1}
+                onClick={() => setTeleStep((prev) => Math.max(1, prev - 1))}
+              >
+                ← Previous
+              </button>
+              <span className="code">Step {teleStep} of 5</span>
+              <button
+                type="button"
+                className="btn-ghost"
+                disabled={teleStep === 5}
+                onClick={() => setTeleStep((prev) => Math.min(5, prev + 1))}
+              >
+                Next →
+              </button>
+            </div>
+
+            <div className="guide-actions" style={{ marginTop: '14px' }}>
+              <a
+                href="https://t.me/BotFather"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-ghost guide-btn"
+              >
+                ↗ Open @BotFather
+              </a>
+              <a
+                href="https://t.me/userinfobot"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-ghost guide-btn"
+              >
+                ↗ Open @userinfobot
+              </a>
+            </div>
+          </div>
         </div>
-      </form>
-
-
-      <div className="settings-info">
-        <h3>ℹ️ Important Notes</h3>
-        <ul>
-          <li>✅ Integration settings (Email, API, Telegram) are personal to your account.</li>
-        </ul>
       </div>
 
+      {/* Full-Screen Image Lightbox Preview Modal */}
+      {zoomImage && (
+        <div className="image-lightbox-backdrop" onClick={() => setZoomImage(null)}>
+          <div className="image-lightbox-card" onClick={(e) => e.stopPropagation()}>
+            <div className="lightbox-head">
+              <h4>🔍 {zoomImage.title}</h4>
+              <button className="lightbox-close-btn" onClick={() => setZoomImage(null)}>
+                ✕ Close (ESC)
+              </button>
+            </div>
+            <div className="lightbox-img-wrapper">
+              <img src={zoomImage.src} alt={zoomImage.title} className="lightbox-img" />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

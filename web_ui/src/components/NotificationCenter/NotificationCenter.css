@@ -10,14 +10,15 @@
 }
 
 .notification {
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  border-left: 4px solid #4CAF50;
+  background: var(--white);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  border-left: 4px solid var(--approve);
   padding: 16px;
   animation: slideIn 0.3s ease-in-out, slideOut 0.3s ease-in-out 5.7s forwards;
   cursor: pointer;
   transition: all 0.2s ease;
+  color: var(--ink);
 }
 
 @keyframes slideIn {
@@ -43,28 +44,28 @@
 }
 
 .notification:hover {
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 8px 24px rgba(30,42,60,0.14);
   transform: translateY(-2px);
 }
 
 .notification-success {
-  border-left-color: #4CAF50;
-  background: #f1f8f6;
+  border-left-color: var(--approve);
+  background: var(--approve-soft);
 }
 
 .notification-error {
-  border-left-color: #f44336;
-  background: #fef5f5;
+  border-left-color: var(--seal);
+  background: var(--seal-soft);
 }
 
 .notification-info {
-  border-left-color: #2196F3;
-  background: #f3f7fb;
+  border-left-color: var(--ink);
+  background: var(--paper-dark);
 }
 
 .notification-warning {
-  border-left-color: #ff9800;
-  background: #fef9f3;
+  border-left-color: var(--gold);
+  background: #FBF0DC;
 }
 
 .notification-content {
@@ -86,8 +87,8 @@
 }
 
 .notification-title {
-  font-weight: 600;
-  color: #333;
+  font-weight: 700;
+  color: var(--ink);
   font-size: 14px;
   flex: 1;
 }
@@ -95,8 +96,8 @@
 .notification-close {
   background: none;
   border: none;
-  font-size: 20px;
-  color: #999;
+  font-size: 18px;
+  color: var(--ink-soft);
   cursor: pointer;
   padding: 0;
   width: 24px;
@@ -108,21 +109,18 @@
 }
 
 .notification-close:hover {
-  color: #333;
+  color: var(--seal);
 }
 
 .notification-message {
-  color: #666;
+  color: var(--ink-soft);
   font-size: 13px;
   line-height: 1.4;
 }
 
-
-/* Action buttons for invoices */
 .notification.action-required {
-  border-left-color: #ff9800;
-  background: #fef9f3;
-  box-shadow: 0 4px 16px rgba(255, 152, 0, 0.2);
+  border-left-color: var(--gold);
+  background: #FBF0DC;
 }
 
 .notification-actions {
@@ -130,63 +128,42 @@
   gap: 10px;
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  border-top: 1px solid var(--line);
 }
 
 .action-btn {
   flex: 1;
-  padding: 10px 14px;
+  padding: 8px 12px;
   border: none;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 12.5px;
+  font-weight: 700;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .approve-btn {
-  background: #4CAF50;
+  background: var(--approve);
   color: white;
 }
 
 .approve-btn:hover {
-  background: #45a049;
-  transform: scale(1.02);
+  background: #2E4E3A;
 }
 
 .reject-btn {
-  background: #f44336;
+  background: var(--seal);
   color: white;
 }
 
 .reject-btn:hover {
-  background: #da190b;
-  transform: scale(1.02);
+  background: var(--seal-dark);
 }
 
-/* Mobile responsiveness */
 @media (max-width: 480px) {
   .notification-container {
     left: 10px;
     right: 10px;
     max-width: none;
     top: 10px;
-  }
-
-  .notification {
-    padding: 12px;
-  }
-
-  .notification-title {
-    font-size: 13px;
-  }
-
-  .notification-message {
-    font-size: 12px;
-  }
-
-  .action-btn {
-    font-size: 12px;
-    padding: 8px 10px;
   }
 }

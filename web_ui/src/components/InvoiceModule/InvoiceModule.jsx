@@ -11,10 +11,6 @@ import { useAuth } from '../../context/AuthContext';
 import InvoiceDetailsModal from './InvoiceDetailsModal';
 import './InvoiceModule.css';
 
-const API_BASE = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === 'development' ? 'http://localhost:8000' : '');
-
-// ── Constants ─────────────────────────────────────────────────────────────────
-
 const EMPTY_FORM = {
   invoice_number: '',
   invoice_date: new Date().toISOString().split('T')[0],
@@ -29,15 +25,6 @@ const EMPTY_DELETE_MODAL = {
   invoiceNumber: null,
   productCount: 0,
 };
-
-const STATUS_LABELS = {
-  pending:  '⏳ Pending',
-  verified: '✅ Verified',
-  rejected: '❌ Rejected',
-  synced:   '📤 Synced',
-};
-
-// ── Component ─────────────────────────────────────────────────────────────────
 
 function InvoiceModule({ adminTargetUser }) {
   const { token } = useAuth();
@@ -57,8 +44,6 @@ function InvoiceModule({ adminTargetUser }) {
   const [formData, setFormData] = useState(EMPTY_FORM);
   const [deleteModal, setDeleteModal] = useState(EMPTY_DELETE_MODAL);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
-  
-  // Local user filter removed, now passed as prop `adminTargetUser`
 
   const loadInvoices = useCallback(async () => {
     setLoading(true);
@@ -78,7 +63,9 @@ function InvoiceModule({ adminTargetUser }) {
     }
   }, [token, statusFilter, searchTerm, adminTargetUser]);
 
-  useEffect(() => { loadInvoices(); }, [loadInvoices]);
+  useEffect(() => {
+    loadInvoices();
+  }, [loadInvoices]);
 
   useEffect(() => {
     return subscribe('invoice_created', () => loadInvoices());
@@ -92,8 +79,6 @@ function InvoiceModule({ adminTargetUser }) {
       setError('Failed to fetch invoice details: ' + err.message);
     }
   };
-
-  // ── Mail scan ───────────────────────────────────────────────────────────────
 
   const handleCheckMail = async () => {
     if (checkMailRunning) return;
@@ -111,8 +96,6 @@ function InvoiceModule({ adminTargetUser }) {
       setCheckMailRunning(false);
     }
   };
-
-  // ── Invoice actions ─────────────────────────────────────────────────────────
 
   const handleApprove = async (invoiceId) => {
     try {
@@ -146,9 +129,10 @@ function InvoiceModule({ adminTargetUser }) {
     setDeleteModal(EMPTY_DELETE_MODAL);
     try {
       await remove(invoiceId, { cascade }, () => {
-        alert(cascade
-          ? `✅ Invoice ${invoiceNumber} deleted and inventory reverted`
-          : `✅ Invoice ${invoiceNumber} deleted`
+        alert(
+          cascade
+            ? `✅ Invoice ${invoiceNumber} deleted and inventory reverted`
+            : `✅ Invoice ${invoiceNumber} deleted`
         );
         loadInvoices();
       });
@@ -158,22 +142,22 @@ function InvoiceModule({ adminTargetUser }) {
     }
   };
 
-  // ── Create invoice ──────────────────────────────────────────────────────────
-
   const handleCreateInvoice = async (e) => {
     e.preventDefault();
     try {
       await createInvoiceApi(token, {
         ...formData,
         invoice_date: new Date(formData.invoice_date).toISOString(),
-        items: [{
-          item_name: 'Sample Item',
-          unit: 'pcs',
-          quantity: 1,
-          unit_price: formData.total_amount,
-          total_price: formData.total_amount,
-          vat_rate: 0,
-        }],
+        items: [
+          {
+            item_name: 'Sample Item',
+            unit: 'pcs',
+            quantity: 1,
+            unit_price: formData.total_amount,
+            total_price: formData.total_amount,
+            vat_rate: 0,
+          },
+        ],
       });
       setShowAddForm(false);
       setFormData(EMPTY_FORM);
@@ -183,86 +167,131 @@ function InvoiceModule({ adminTargetUser }) {
     }
   };
 
-  // ── Render ──────────────────────────────────────────────────────────────────
+  const renderStatusStamp = (status) => {
+    switch (status) {
+      case 'verified':
+      case 'approved':
+        return <span className="stamp approved">Verified</span>;
+      case 'rejected':
+        return <span className="stamp rejected">Rejected</span>;
+      case 'synced':
+        return <span className="stamp synced">Synced</span>;
+      case 'pending':
+      default:
+        return <span className="stamp pending">Pending</span>;
+    }
+  };
 
   return (
-    <div className="invoice-module">
-
-      <div className="module-header">
-        <h2>📄 Invoices</h2>
-        <button onClick={() => setShowAddForm(!showAddForm)} className="btn-primary">
-          {showAddForm ? 'Cancel' : '+ Add Invoice'}
+    <div id="page-invoices" className="page active">
+      <div className="page-header">
+        <h2>
+          <span className="eyebrow">Ledger</span>Invoices
+        </h2>
+        <button className="btn-seal" onClick={() => setShowAddForm(!showAddForm)}>
+          {showAddForm ? '✕ Cancel' : '+ Add Invoice'}
         </button>
       </div>
 
-      <div className="check-mail-section">
-        <button onClick={handleCheckMail} className="btn-check-mail" disabled={checkMailRunning}>
-          {checkMailRunning ? '⏳ Checking mail...' : '📥 Check Mail Now'}
+      <div className="callout">
+        <div className="callout-text">
+          Scan the inbox for newly arrived invoice emails and queue them here for review.
+          {checkMailStatus && <div className="callout-substatus">{checkMailStatus}</div>}
+        </div>
+        <button className="btn-mail" onClick={handleCheckMail} disabled={checkMailRunning}>
+          {checkMailRunning ? '⏳ Checking...' : '✉ Check Mail Now'}
         </button>
-        {checkMailStatus && <span className="mail-status">{checkMailStatus}</span>}
-      </div>
-
-      <div className="filters-section">
-        <input
-          type="text"
-          placeholder="Search invoices..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="filter-input"
-        />
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="filter-select"
-        >
-          <option value="">All Status</option>
-          <option value="pending">Pending</option>
-          <option value="verified">Verified</option>
-          <option value="synced">Synced</option>
-        </select>
       </div>
 
       {showAddForm && (
-        <form onSubmit={handleCreateInvoice} className="add-form">
+        <div className="panel form-panel">
           <h3>Add New Invoice</h3>
-          <div className="form-group">
-            <label>Invoice Number</label>
-            <input type="text" required value={formData.invoice_number}
-              onChange={(e) => setFormData({ ...formData, invoice_number: e.target.value })}
-              placeholder="e.g., INV-001" />
-          </div>
-          <div className="form-row">
-            <div className="form-group">
-              <label>Invoice Date</label>
-              <input type="date" required value={formData.invoice_date}
-                onChange={(e) => setFormData({ ...formData, invoice_date: e.target.value })} />
+          <form onSubmit={handleCreateInvoice} className="add-invoice-form">
+            <div className="field">
+              <label>Invoice Number</label>
+              <input
+                type="text"
+                required
+                value={formData.invoice_number}
+                onChange={(e) => setFormData({ ...formData, invoice_number: e.target.value })}
+                placeholder="e.g., INV-001"
+              />
             </div>
-            <div className="form-group">
-              <label>Total Amount</label>
-              <input type="number" required min="0" step="0.01" value={formData.total_amount}
-                onChange={(e) => setFormData({ ...formData, total_amount: parseFloat(e.target.value) })} />
+            <div className="form-row">
+              <div className="field">
+                <label>Invoice Date</label>
+                <input
+                  type="date"
+                  required
+                  value={formData.invoice_date}
+                  onChange={(e) => setFormData({ ...formData, invoice_date: e.target.value })}
+                />
+              </div>
+              <div className="field">
+                <label>Total Amount (VND)</label>
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  step="0.01"
+                  value={formData.total_amount}
+                  onChange={(e) => setFormData({ ...formData, total_amount: parseFloat(e.target.value) || 0 })}
+                />
+              </div>
             </div>
-          </div>
-          <div className="form-group">
-            <label>Buyer Name</label>
-            <input type="text" required value={formData.buyer_name}
-              onChange={(e) => setFormData({ ...formData, buyer_name: e.target.value })}
-              placeholder="Enter buyer name" />
-          </div>
-          <div className="form-actions">
-            <button type="submit" className="btn-primary">Save Invoice</button>
-            <button type="button" onClick={() => setShowAddForm(false)} className="btn-secondary">Cancel</button>
-          </div>
-        </form>
+            <div className="field">
+              <label>Buyer Name</label>
+              <input
+                type="text"
+                required
+                value={formData.buyer_name}
+                onChange={(e) => setFormData({ ...formData, buyer_name: e.target.value })}
+                placeholder="Enter buyer name"
+              />
+            </div>
+            <div className="form-actions-row">
+              <button type="submit" className="btn-seal">Save Invoice</button>
+              <button type="button" onClick={() => setShowAddForm(false)} className="btn-ghost">Cancel</button>
+            </div>
+          </form>
+        </div>
       )}
 
-      {error && <div className="error-message">{error}</div>}
-      {loading && <div className="loading">Loading invoices...</div>}
+      {error && <div className="alert alert-error">{error}</div>}
 
-      {!loading && invoices.length === 0 ? (
-        <div className="empty-state"><p>No invoices found</p></div>
-      ) : (
-        <div className="invoices-table-wrapper">
+      <div className="panel">
+        <div className="toolbar">
+          <input
+            className="search-input"
+            placeholder="Search invoices..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          <select
+            className="select-input"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option value="">All Status</option>
+            <option value="pending">Pending</option>
+            <option value="verified">Verified</option>
+            <option value="rejected">Rejected</option>
+            <option value="synced">Synced</option>
+          </select>
+        </div>
+
+        {loading ? (
+          <div className="empty-state">
+            <div className="glyph">⏳</div>
+            <p>Loading invoices...</p>
+          </div>
+        ) : invoices.length === 0 ? (
+          <div className="empty-state">
+            <div className="glyph">▤</div>
+            <h3>No invoices found</h3>
+            <p>There are no invoices matching your criteria.</p>
+          </div>
+        ) : (
           <table className="invoices-table">
             <thead>
               <tr>
@@ -276,101 +305,96 @@ function InvoiceModule({ adminTargetUser }) {
                 <th>Actions</th>
               </tr>
             </thead>
-            <tbody>
-              {invoices.map((invoice) => (
-                <tr key={invoice.id} className={`status-${invoice.status}`}>
-                  <td><code>{invoice.lookup_code || '—'}</code></td>
-                  <td>{invoice.invoice_series || '—'}</td>
-                  <td><strong>{invoice.invoice_number}</strong></td>
-                  <td>{invoice.invoice_date ? new Date(invoice.invoice_date).toLocaleDateString() : '—'}</td>
-                  <td>{invoice.buyer_name}</td>
-                  <td>{(invoice.total_amount || 0).toLocaleString('vi-VN')} VND</td>
-                  <td>
-                    <span className={`badge badge-${invoice.status}`}>
-                      {STATUS_LABELS[invoice.status] ?? invoice.status}
-                    </span>
+            <tbody id="invoice-tbody">
+              {invoices.map((inv) => (
+                <tr key={inv.id}>
+                  <td data-label="Lookup Code"><span className="code">{inv.lookup_code || '—'}</span></td>
+                  <td data-label="Series"><span className="code">{inv.invoice_series || '—'}</span></td>
+                  <td data-label="Invoice #"><b>{inv.invoice_number}</b></td>
+                  <td data-label="Date">
+                    {inv.invoice_date ? new Date(inv.invoice_date).toLocaleDateString('vi-VN') : '—'}
                   </td>
-                  <td>
-                    <InvoiceRowActions
-                      invoice={invoice}
-                      onView={() => handleViewInvoice(invoice.id)}
-                      onApprove={handleApprove}
-                      onReject={handleReject}
-                      onDelete={handleOpenDeleteModal}
-                      isApproving={isApproving(invoice.id)}
-                      isRejecting={isRejecting(invoice.id)}
-                      isDeleting={isDeleting(invoice.id)}
-                    />
+                  <td data-label="Buyer">{inv.buyer_name || '—'}</td>
+                  <td data-label="Amount">
+                    <span className="amount">{(inv.total_amount || 0).toLocaleString('vi-VN')} VND</span>
+                  </td>
+                  <td data-label="Status">{renderStatusStamp(inv.status)}</td>
+                  <td data-label="Actions">
+                    <div className="row-actions">
+                      <button className="act" onClick={() => handleViewInvoice(inv.id)}>
+                        👁 View
+                      </button>
+                      {inv.status === 'pending' && (
+                        <>
+                          <button
+                            className="act approve"
+                            onClick={() => handleApprove(inv.id)}
+                            disabled={isApproving(inv.id)}
+                          >
+                            {isApproving(inv.id) ? '⏳' : '✓'} Approve
+                          </button>
+                          <button
+                            className="act reject"
+                            onClick={() => handleReject(inv.id)}
+                            disabled={isRejecting(inv.id)}
+                          >
+                            {isRejecting(inv.id) ? '⏳' : '✕'} Reject
+                          </button>
+                        </>
+                      )}
+                      <button
+                        className="act delete"
+                        onClick={() => handleOpenDeleteModal(inv)}
+                        disabled={isDeleting(inv.id)}
+                      >
+                        {isDeleting(inv.id) ? '⏳' : '🗑'} Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
-      )}
+        )}
+      </div>
 
+      {/* Delete Modal */}
       {deleteModal.show && (
-        <div className="modal-overlay">
-          <div className="modal-content">
-            <h3>🗑️ Delete Invoice</h3>
-            <p><strong>Invoice Number:</strong> {deleteModal.invoiceNumber}</p>
-            <p><strong>Products in this invoice:</strong> {deleteModal.productCount}</p>
-            <p className="warning-text">⚠️ This action cannot be undone!</p>
+        <div className="modal-backdrop">
+          <div className="login-card modal-card">
+            <h3>Delete Invoice #{deleteModal.invoiceNumber}?</h3>
+            <p className="help-text">Products in invoice: {deleteModal.productCount}</p>
             <div className="modal-options">
-              <div className="option-card">
-                <h4>Option 1: Delete Invoice &amp; Revert Inventory</h4>
-                <p>Remove this invoice and subtract {deleteModal.productCount} product(s) from stock</p>
-                <button onClick={() => handleDeleteInvoice(true)} className="btn-delete-cascade">
-                  🗑️ Delete All
-                </button>
-              </div>
-              <div className="option-card">
-                <h4>Option 2: Delete Invoice Only</h4>
-                <p>Remove only this invoice, keep all {deleteModal.productCount} products in inventory</p>
-                <button onClick={() => handleDeleteInvoice(false)} className="btn-delete-only">
-                  📋 Delete Invoice
-                </button>
-              </div>
-            </div>
-            <div className="modal-actions">
-              <button onClick={() => setDeleteModal(EMPTY_DELETE_MODAL)} className="btn-cancel">
-                ❌ Cancel
+              <button
+                className="btn-primary btn-danger-action"
+                onClick={() => handleDeleteInvoice(true)}
+              >
+                Delete Invoice & Revert Inventory
+              </button>
+              <button
+                className="btn-ghost"
+                style={{ marginTop: '8px', width: '100%' }}
+                onClick={() => handleDeleteInvoice(false)}
+              >
+                Delete Invoice Only
+              </button>
+              <button
+                className="btn-ghost"
+                style={{ marginTop: '8px', width: '100%', borderColor: 'transparent' }}
+                onClick={() => setDeleteModal(EMPTY_DELETE_MODAL)}
+              >
+                Cancel
               </button>
             </div>
           </div>
         </div>
       )}
 
-      <InvoiceDetailsModal 
-        invoice={selectedInvoice} 
-        onClose={() => setSelectedInvoice(null)} 
+      {/* View Modal */}
+      <InvoiceDetailsModal
+        invoice={selectedInvoice}
+        onClose={() => setSelectedInvoice(null)}
       />
-    </div>
-  );
-}
-
-// ── Row actions sub-component ─────────────────────────────────────────────────
-
-function InvoiceRowActions({ invoice, onView, onApprove, onReject, onDelete, isApproving, isRejecting, isDeleting }) {
-  const busy = isApproving || isRejecting || isDeleting;
-  return (
-    <div className="action-buttons">
-      <button onClick={onView} className="btn-secondary" style={{ marginRight: '5px' }}>
-        🔍 View
-      </button>
-      {invoice.status === 'pending' && (
-        <>
-          <button onClick={() => onApprove(invoice.id)} className="btn-approve" disabled={busy}>
-            {isApproving ? '⏳' : '✅'} Approve
-          </button>
-          <button onClick={() => onReject(invoice.id)} className="btn-reject" disabled={busy}>
-            {isRejecting ? '⏳' : '❌'} Reject
-          </button>
-        </>
-      )}
-      <button onClick={() => onDelete(invoice)} className="btn-delete" disabled={busy}>
-        {isDeleting ? '⏳' : '🗑️'} Delete
-      </button>
     </div>
   );
 }

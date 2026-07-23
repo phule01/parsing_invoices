@@ -18,32 +18,30 @@ function ProductModule() {
   const [deleteModal, setDeleteModal] = useState({
     show: false,
     productId: null,
-    productName: null
+    productName: null,
   });
   const [formData, setFormData] = useState({
     name: '',
     price: 0,
     quantity_in_stock: 0,
     category: '',
-    description: ''
+    description: '',
   });
 
-  // Fetch products
   const fetchProducts = useCallback(async () => {
     setLoading(true);
     setError('');
-    
     try {
       let url = `${API_BASE}/api/products/?limit=100`;
       if (categoryFilter) url += `&category=${categoryFilter}`;
       if (searchTerm) url += `&search=${searchTerm}`;
 
       const response = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       if (!response.ok) throw new Error('Failed to fetch products');
-      
+
       const data = await response.json();
       setProducts(data);
     } catch (err) {
@@ -53,12 +51,11 @@ function ProductModule() {
     }
   }, [token, categoryFilter, searchTerm]);
 
-  // Fetch categories
   useEffect(() => {
     const fetchCategories = async () => {
       try {
         const response = await fetch(`${API_BASE}/api/products/categories`, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${token}` },
         });
         if (response.ok) {
           const data = await response.json();
@@ -76,16 +73,13 @@ function ProductModule() {
     fetchProducts();
   }, [fetchProducts]);
 
-  // Subscribe to WebSocket updates
   useEffect(() => {
     const unsubscribe1 = subscribe('notification', (message) => {
       const notif = message.notification;
-      // Refetch products on any product/invoice-related notification
-      if (notif.type && (
-        notif.type.includes('product') || 
-        notif.type.includes('invoice_approved')
-      )) {
-        console.log('Product/invoice update notification:', notif.type);
+      if (
+        notif.type &&
+        (notif.type.includes('product') || notif.type.includes('invoice_approved'))
+      ) {
         fetchProducts();
       }
     });
@@ -93,25 +87,23 @@ function ProductModule() {
     return unsubscribe1;
   }, [subscribe, fetchProducts]);
 
-  // Handle open delete modal
   const handleOpenDeleteModal = (product) => {
     setDeleteModal({
       show: true,
       productId: product.id,
-      productName: product.name
+      productName: product.name,
     });
   };
 
-  // Handle delete product
   const handleDeleteProduct = async () => {
     const { productId, productName } = deleteModal;
-    
+
     try {
       const response = await fetch(`${API_BASE}/api/products/${productId}`, {
         method: 'DELETE',
         headers: {
-          Authorization: `Bearer ${token}`
-        }
+          Authorization: `Bearer ${token}`,
+        },
       });
 
       if (!response.ok) {
@@ -119,8 +111,6 @@ function ProductModule() {
       }
 
       alert(`✅ Product "${productName}" has been deleted`);
-      
-      // Close modal and refresh
       setDeleteModal({ show: false, productId: null, productName: null });
       fetchProducts();
     } catch (err) {
@@ -129,22 +119,21 @@ function ProductModule() {
     }
   };
 
-  // Handle create product
   const handleCreateProduct = async (e) => {
     e.preventDefault();
-    
+
     try {
       const response = await fetch(`${API_BASE}/api/products/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           ...formData,
-          price: parseFloat(formData.price),
-          quantity_in_stock: parseInt(formData.quantity_in_stock)
-        })
+          price: parseFloat(formData.price) || 0,
+          quantity_in_stock: parseInt(formData.quantity_in_stock) || 0,
+        }),
       });
 
       if (!response.ok) throw new Error('Failed to create product');
@@ -155,126 +144,132 @@ function ProductModule() {
         price: 0,
         quantity_in_stock: 0,
         category: '',
-        description: ''
+        description: '',
       });
-      
+
       fetchProducts();
     } catch (err) {
       setError(err.message);
     }
   };
 
+  const activeProducts = products.filter((p) => p.quantity_in_stock > 0);
+
   return (
-    <div className="product-module">
-      <div className="module-header">
-        <h2>📦 Products</h2>
-        <button onClick={() => setShowAddForm(!showAddForm)} className="btn-primary">
-          {showAddForm ? 'Cancel' : '+ Add Product'}
+    <div id="page-products" className="page active">
+      <div className="page-header">
+        <h2>
+          <span className="eyebrow">Inventory</span>Products
+        </h2>
+        <button className="btn-seal" onClick={() => setShowAddForm(!showAddForm)}>
+          {showAddForm ? '✕ Cancel' : '+ Add Product'}
         </button>
       </div>
 
-      {/* Filters */}
-      <div className="filters-section">
-        <input
-          type="text"
-          placeholder="Search products..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="filter-input"
-        />
-        <select
-          value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
-          className="filter-select"
-        >
-          <option value="">All Categories</option>
-          {categories.map(cat => (
-            <option key={cat} value={cat}>{cat}</option>
-          ))}
-        </select>
-      </div>
-
-      {/* Add Product Form */}
       {showAddForm && (
-        <form onSubmit={handleCreateProduct} className="add-form">
+        <div className="panel form-panel">
           <h3>Add New Product</h3>
-          
-          <div className="form-group">
-            <label>Product Name *</label>
-            <input
-              type="text"
-              required
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              placeholder="e.g., USB Cable"
-            />
-          </div>
-
-          <div className="form-row">
-            <div className="form-group">
-              <label>Price *</label>
-              <input
-                type="number"
-                required
-                min="0"
-                step="0.01"
-                value={formData.price}
-                onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) })}
-              />
-            </div>
-
-            <div className="form-group">
-              <label>Stock Quantity *</label>
-              <input
-                type="number"
-                required
-                min="0"
-                value={formData.quantity_in_stock}
-                onChange={(e) => setFormData({ ...formData, quantity_in_stock: parseInt(e.target.value) })}
-              />
-            </div>
-
-            <div className="form-group">
-              <label>Category</label>
+          <form onSubmit={handleCreateProduct} className="add-product-form">
+            <div className="field">
+              <label>Product Name *</label>
               <input
                 type="text"
-                value={formData.category}
-                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                placeholder="e.g., Electronics"
+                required
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                placeholder="e.g., USB Cable"
               />
             </div>
-          </div>
 
-          <div className="form-group">
-            <label>Description</label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              placeholder="Product details"
-              rows="3"
-            />
-          </div>
+            <div className="form-row">
+              <div className="field">
+                <label>Price (VND) *</label>
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  step="0.01"
+                  value={formData.price}
+                  onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                />
+              </div>
 
-          <div className="form-actions">
-            <button type="submit" className="btn-primary">Save Product</button>
-            <button type="button" onClick={() => setShowAddForm(false)} className="btn-secondary">Cancel</button>
-          </div>
-        </form>
+              <div className="field">
+                <label>Stock Quantity *</label>
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  value={formData.quantity_in_stock}
+                  onChange={(e) => setFormData({ ...formData, quantity_in_stock: e.target.value })}
+                />
+              </div>
+
+              <div className="field">
+                <label>Category</label>
+                <input
+                  type="text"
+                  value={formData.category}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  placeholder="e.g., Electronics"
+                />
+              </div>
+            </div>
+
+            <div className="field">
+              <label>Description</label>
+              <textarea
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                placeholder="Product details"
+                rows="3"
+              />
+            </div>
+
+            <div className="form-actions-row">
+              <button type="submit" className="btn-seal">Save Product</button>
+              <button type="button" onClick={() => setShowAddForm(false)} className="btn-ghost">Cancel</button>
+            </div>
+          </form>
+        </div>
       )}
 
-      {/* Error Message */}
-      {error && <div className="error-message">{error}</div>}
+      {error && <div className="alert alert-error">{error}</div>}
 
-      {/* Loading */}
-      {loading && <div className="loading">Loading products...</div>}
-
-      {/* Products Table */}
-      {!loading && products.filter(p => p.quantity_in_stock > 0).length === 0 ? (
-        <div className="empty-state">
-          <p>No active products (all have 0 stock)</p>
+      <div className="panel">
+        <div className="toolbar">
+          <input
+            className="search-input"
+            placeholder="Search products..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          <select
+            className="select-input"
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+          >
+            <option value="">All Categories</option>
+            {categories.map((cat) => (
+              <option key={cat} value={cat}>
+                {cat}
+              </option>
+            ))}
+          </select>
         </div>
-      ) : (
-        <div className="products-table-wrapper">
+
+        {loading ? (
+          <div className="empty-state">
+            <div className="glyph">⏳</div>
+            <p>Loading inventory...</p>
+          </div>
+        ) : activeProducts.length === 0 ? (
+          <div className="empty-state">
+            <div className="glyph">▣</div>
+            <h3>No products in stock</h3>
+            <p>Every item on hand currently reads zero. Add a product to start tracking it here.</p>
+          </div>
+        ) : (
           <table className="products-table">
             <thead>
               <tr>
@@ -287,53 +282,50 @@ function ProductModule() {
               </tr>
             </thead>
             <tbody>
-              {products.filter(p => p.quantity_in_stock > 0).map(product => (
+              {activeProducts.map((product) => (
                 <tr key={product.id}>
-                  <td>{product.name}</td>
-                  <td>{product.price.toLocaleString('vi-VN')} VND</td>
-                  <td>{product.quantity_in_stock}</td>
-                  <td>{product.category || '-'}</td>
-                  <td>
-                    <span className={`badge ${product.quantity_in_stock < 10 ? 'low-stock' : 'in-stock'}`}>
-                      {product.quantity_in_stock < 10 ? 'Low' : 'OK'}
+                  <td data-label="Name"><b>{product.name}</b></td>
+                  <td data-label="Price">
+                    <span className="amount">{(product.price || 0).toLocaleString('vi-VN')} VND</span>
+                  </td>
+                  <td data-label="Stock"><span className="code">{product.quantity_in_stock}</span></td>
+                  <td data-label="Category">{product.category || '—'}</td>
+                  <td data-label="Status">
+                    <span className={`stamp ${product.quantity_in_stock < 10 ? 'rejected' : 'approved'}`}>
+                      {product.quantity_in_stock < 10 ? 'Low Stock' : 'In Stock'}
                     </span>
                   </td>
-                  <td>
+                  <td data-label="Actions">
                     <button
+                      className="act delete"
                       onClick={() => handleOpenDeleteModal(product)}
-                      className="btn-delete-product"
-                      title="Delete this product"
                     >
-                      🗑️ Delete
+                      🗑 Delete
                     </button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* Delete Confirmation Modal */}
       {deleteModal.show && (
-        <div className="modal-overlay">
-          <div className="modal-content">
-            <h3>🗑️ Delete Product</h3>
-            <p><strong>Product Name:</strong> {deleteModal.productName}</p>
-            <p className="warning-text">⚠️ This action cannot be undone! This product will be permanently removed from the inventory.</p>
-            
-            <div className="modal-actions">
-              <button
-                onClick={handleDeleteProduct}
-                className="btn-confirm-delete"
-              >
-                🗑️ Confirm Delete
+        <div className="modal-backdrop">
+          <div className="login-card modal-card">
+            <h3>Delete Product?</h3>
+            <p className="help-text">Product: <b>{deleteModal.productName}</b></p>
+            <p className="help-text" style={{ color: 'var(--seal)' }}>⚠️ Action cannot be undone.</p>
+            <div className="modal-options" style={{ marginTop: '16px' }}>
+              <button className="btn-primary btn-danger-action" onClick={handleDeleteProduct}>
+                Confirm Delete
               </button>
               <button
+                className="btn-ghost"
+                style={{ marginTop: '8px', width: '100%' }}
                 onClick={() => setDeleteModal({ show: false, productId: null, productName: null })}
-                className="btn-cancel-delete"
               >
-                ❌ Cancel
+                Cancel
               </button>
             </div>
           </div>
