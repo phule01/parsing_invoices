@@ -28,7 +28,7 @@
 
 .guide h4 {
   margin: 0 0 10px;
-  font-size: 13.5px;
+  font-size: 17px;
   font-weight: 700;
   display: flex;
   gap: 8px;
@@ -38,7 +38,7 @@
 .guide ol {
   margin: 0;
   padding-left: 18px;
-  font-size: 13px;
+  font-size: 16.5px;
   color: var(--ink-soft);
   line-height: 1.8;
 }
@@ -53,7 +53,7 @@
   background: #FBF0DC;
   border: 1px solid #E4C88C;
   padding: 12px 16px;
-  font-size: 12.5px;
+  font-size: 16px;
   color: #7A5A1E;
   display: flex;
   gap: 8px;
@@ -73,7 +73,7 @@
 
 .card-block-head h3 {
   margin: 0;
-  font-size: 14.5px;
+  font-size: 18px;
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -81,7 +81,7 @@
 }
 
 .verified-pill {
-  font-size: 10.5px;
+  font-size: 14px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -97,7 +97,7 @@
 }
 
 .help-text {
-  font-size: 12px;
+  font-size: 15.5px;
   color: var(--ink-soft);
   margin-top: 6px;
   line-height: 1.5;
@@ -108,7 +108,7 @@
   background: var(--white);
   border: 1px solid var(--ink);
   color: var(--ink);
-  font-size: 12.5px;
+  font-size: 16px;
   font-weight: 600;
   margin-top: 4px;
   transition: all .15s ease;
@@ -124,7 +124,7 @@
   background: var(--seal);
   color: #fff;
   border: none;
-  font-size: 13.5px;
+  font-size: 17px;
   font-weight: 700;
   transition: background .15s ease;
 }
@@ -142,7 +142,7 @@
   background: #EAF1EF;
   border-left: 3px solid var(--approve);
   padding: 14px 18px;
-  font-size: 12.5px;
+  font-size: 16px;
   color: #2E4E3A;
   margin-top: 10px;
 }
@@ -154,7 +154,7 @@
 
 .ai-summary-header {
   cursor: pointer;
-  font-size: 14px;
+  font-size: 17.5px;
   font-weight: 700;
   user-select: none;
   color: var(--ink);
@@ -185,7 +185,7 @@
   background: var(--paper);
   border: 1px solid var(--line);
   color: var(--ink-soft);
-  font-size: 12px;
+  font-size: 15.5px;
   font-weight: 600;
   cursor: pointer;
   transition: all .15s ease;
@@ -224,7 +224,7 @@
   right: 10px;
   background: rgba(30, 42, 60, 0.85);
   color: #fff;
-  font-size: 11.5px;
+  font-size: 15px;
   font-weight: 600;
   padding: 4px 10px;
   border-radius: 4px;
@@ -265,7 +265,7 @@
 }
 
 .guide-btn {
-  font-size: 12px;
+  font-size: 15.5px;
   text-decoration: none;
   display: inline-flex;
   align-items: center;
@@ -324,7 +324,7 @@
 
 .lightbox-head h4 {
   margin: 0;
-  font-size: 15px;
+  font-size: 18.5px;
   font-weight: 700;
   color: var(--ink);
 }
@@ -334,7 +334,7 @@
   color: #fff;
   border: none;
   padding: 6px 14px;
-  font-size: 13px;
+  font-size: 16.5px;
   font-weight: 700;
   cursor: pointer;
   border-radius: 4px;

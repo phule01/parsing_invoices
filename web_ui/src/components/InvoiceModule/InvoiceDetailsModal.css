@@ -30,7 +30,7 @@
 
 .header-title h2 {
   margin: 0;
-  font-size: 1.3rem;
+  font-size: 1.65rem;
   font-weight: 800;
   color: var(--ink);
 }
@@ -39,7 +39,7 @@
   background: var(--approve-soft);
   color: var(--approve);
   padding: 4px 8px;
-  font-size: 11px;
+  font-size: 17.5px;
   font-weight: 700;
   border-radius: 4px;
 }
@@ -48,7 +48,7 @@
   background: #FBF0DC;
   color: var(--gold);
   padding: 4px 8px;
-  font-size: 11px;
+  font-size: 17.5px;
   font-weight: 700;
   border-radius: 4px;
 }
@@ -64,7 +64,7 @@
   color: var(--ink);
   border: 1px solid var(--line);
   padding: 6px 12px;
-  font-size: 0.85rem;
+  font-size: 1.15rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -81,7 +81,7 @@
 .btn-close {
   background: transparent;
   border: none;
-  font-size: 1.25rem;
+  font-size: 1.6rem;
   cursor: pointer;
   color: var(--ink-soft);
   transition: color 0.2s;
@@ -103,7 +103,7 @@
   background: var(--paper-dark);
   border: 1px solid var(--line);
   margin-bottom: 24px;
-  font-size: 0.88rem;
+  font-size: 1.15rem;
   color: var(--ink-soft);
   font-family: 'IBM Plex Mono', monospace;
 }
@@ -125,7 +125,7 @@
   margin-top: 0;
   margin-bottom: 12px;
   color: var(--ink);
-  font-size: 1rem;
+  font-size: 1.3rem;
   font-weight: 700;
   border-bottom: 1px solid var(--line);
   padding-bottom: 8px;
@@ -133,7 +133,7 @@
 
 .party-card p {
   margin: 6px 0;
-  font-size: 0.9rem;
+  font-size: 1.15rem;
   color: var(--ink-soft);
 }
 
@@ -148,7 +148,7 @@
 .items-section h3 {
   margin-bottom: 16px;
   color: var(--ink);
-  font-size: 1rem;
+  font-size: 1.3rem;
   font-weight: 700;
 }
 
@@ -172,14 +172,14 @@
 .items-table th {
   background: var(--paper-dark);
   font-weight: 700;
-  font-size: 11px;
+  font-size: 17.5px;
   text-transform: uppercase;
   color: var(--ink-soft);
 }
 
 .items-table td {
   color: var(--ink);
-  font-size: 13px;
+  font-size: 19.5px;
 }
 
 .items-table .text-right {
@@ -211,14 +211,14 @@
   display: flex;
   justify-content: space-between;
   margin-bottom: 10px;
-  font-size: 13px;
+  font-size: 19.5px;
   color: var(--ink-soft);
 }
 
 .grand-total {
   border-top: 1px solid var(--line);
   padding-top: 10px;
-  font-size: 1rem;
+  font-size: 1.35rem;
   font-weight: 800;
   color: var(--ink);
   font-family: 'IBM Plex Mono', monospace;
@@ -237,7 +237,7 @@
   padding: 8px 16px;
   cursor: pointer;
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 12px;
+  font-size: 18px;
 }
 
 .btn-toggle-json:hover {
@@ -251,7 +251,7 @@
   margin-top: 12px;
   overflow-x: auto;
   color: #E2E8F0;
-  font-size: 12px;
+  font-size: 18px;
   line-height: 1.5;
   font-family: 'IBM Plex Mono', monospace;
 }

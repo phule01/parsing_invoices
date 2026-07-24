@@ -26,7 +26,7 @@
 
 .sidebar-brand-title {
   font-weight: 800;
-  font-size: 16.5px;
+  font-size: 25px;
   letter-spacing: -0.2px;
   line-height: 1.25;
 }
@@ -36,7 +36,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: 17.5px;
   font-family: 'IBM Plex Mono', monospace;
   color: #8FD6A6;
 }
@@ -59,7 +59,7 @@
   align-items: center;
   gap: 11px;
   padding: 12px 22px;
-  font-size: 14px;
+  font-size: 21px;
   font-weight: 500;
   color: rgba(255,255,255,0.62);
   border-left: 3px solid transparent;
@@ -103,7 +103,7 @@
 }
 
 .topbar-title {
-  font-size: 13px;
+  font-size: 20px;
   color: var(--ink-soft);
   font-family: 'IBM Plex Mono', monospace;
   letter-spacing: 0.5px;
@@ -116,7 +116,7 @@
 }
 
 .welcome {
-  font-size: 13.5px;
+  font-size: 21px;
   color: var(--ink-soft);
 }
 
@@ -129,7 +129,7 @@
   background: transparent;
   border: 1px solid var(--line);
   color: var(--ink);
-  font-size: 13px;
+  font-size: 19.5px;
   font-weight: 600;
   transition: all .15s ease;
 }
